@@ -8,7 +8,7 @@ Bot para automatizar o acesso ao currículo da UTFPR, extraindo informações so
 - Armazenamento em banco de dados PostgreSQL
 - API REST para consulta dos dados
 - Interface web para visualização
-- Bot do Telegram para consultas rápidas
+- Bot do WhatsApp para consultas rápidas
 
 ## Requisitos
 
@@ -16,6 +16,7 @@ Bot para automatizar o acesso ao currículo da UTFPR, extraindo informações so
 - PostgreSQL 12+
 - Chrome/Chromium (para web scraping)
 - ChromeDriver (compatível com sua versão do Chrome)
+- Conta do WhatsApp Business API ou biblioteca como whatsapp-web.js
 
 ## Instalação
 
@@ -52,7 +53,7 @@ python -m scraper.main
 python -m api.main
 ```
 
-3. Para iniciar o bot do Telegram:
+3. Para iniciar o bot do WhatsApp:
 ```bash
 python -m bot.main
 ```
@@ -62,7 +63,7 @@ python -m bot.main
 ```
 turing_bot/
 ├── api/            # API REST
-├── bot/            # Bot do Telegram
+├── bot/            # Bot do WhatsApp
 ├── core/           # Modelos e lógica de negócio
 ├── db/             # Camada de banco de dados
 ├── scraper/        # Web scraping
