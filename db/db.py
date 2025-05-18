@@ -40,7 +40,10 @@ class Database:
         """Executa uma query e retorna os resultados"""
         with self.get_cursor() as cursor:
             cursor.execute(query, params or {})
-            return cursor.fetchall()
+            try:
+                return cursor.fetchall()
+            except psycopg2.ProgrammingError:
+                return None
     
     def execute_update(self, query, params=None):
         """Executa uma query de atualização e retorna o número de linhas afetadas"""

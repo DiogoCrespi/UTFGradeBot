@@ -6,12 +6,13 @@ INSERT_CURSO = """
     SET nome = EXCLUDED.nome,
         campus = EXCLUDED.campus,
         updated_at = CURRENT_TIMESTAMP
-    RETURNING id
+    RETURNING id;
 """
 
 SELECT_CURSO_POR_CODIGO = """
-    SELECT * FROM cursos
-    WHERE codigo = %(codigo)s
+    SELECT id, codigo, nome, campus
+    FROM cursos
+    WHERE codigo = %(codigo)s;
 """
 
 # Queries para manipulação de disciplinas
@@ -22,7 +23,7 @@ INSERT_DISCIPLINA = """
     SET carga_horaria = EXCLUDED.carga_horaria,
         tipo = EXCLUDED.tipo,
         updated_at = CURRENT_TIMESTAMP
-    RETURNING id
+    RETURNING id;
 """
 
 SELECT_DISCIPLINA_POR_CODIGO = """
@@ -36,7 +37,7 @@ INSERT_CURSO_DISCIPLINA = """
     VALUES (%(curso_id)s, %(disciplina_id)s, %(periodo)s)
     ON CONFLICT (curso_id, disciplina_id, periodo) DO UPDATE
     SET updated_at = CURRENT_TIMESTAMP
-    RETURNING id
+    RETURNING id;
 """
 
 SELECT_DISCIPLINAS_POR_CURSO_PERIODO = """
@@ -55,4 +56,26 @@ SELECT_CARGA_HORARIA_TOTAL_POR_PERIODO = """
     WHERE cd.curso_id = %(curso_id)s
     GROUP BY cd.periodo
     ORDER BY cd.periodo
+"""
+
+# Queries para manipulação de turmas
+INSERT_TURMA = """
+    INSERT INTO turmas (disciplina_id, codigo, professor, vagas_totais, vagas_ocupadas)
+    VALUES (%(disciplina_id)s, %(codigo)s, %(professor)s, %(vagas_totais)s, %(vagas_ocupadas)s)
+    ON CONFLICT (disciplina_id, codigo) DO UPDATE
+    SET professor = EXCLUDED.professor,
+        vagas_totais = EXCLUDED.vagas_totais,
+        vagas_ocupadas = EXCLUDED.vagas_ocupadas,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING id;
+"""
+
+# Queries para manipulação de horários
+INSERT_HORARIO = """
+    INSERT INTO horarios (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
+    VALUES (%(turma_id)s, %(dia_semana)s, %(turno)s, %(aula_inicio)s, %(aula_fim)s, %(sala)s)
+    ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO UPDATE
+    SET aula_fim = EXCLUDED.aula_fim,
+        sala = EXCLUDED.sala,
+        updated_at = CURRENT_TIMESTAMP;
 """ 
