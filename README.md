@@ -17,5 +17,5 @@ Este projeto tem como objetivo automatizar a coleta da grade curricular do curso
 
 ## Colaboradores
 
-- @Matheus__Cunha1  
+- @MatheusCunha1  
 - @DiogoCrespi
