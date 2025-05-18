@@ -22,8 +22,8 @@ wheels/
 
 # Virtual Environment
 venv/
-ENV/
 env/
+ENV/
 
 # IDE
 .idea/
@@ -31,16 +31,20 @@ env/
 *.swp
 *.swo
 
-# Logs
-*.log
-logs/
-
 # Environment variables
 .env
+
+# Logs
+*.log
 
 # Database
 *.db
 *.sqlite3
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Chrome driver
 chromedriver

@@ -1,106 +1,90 @@
-# Turing Bot
+# Turing Bot UTFPR
 
-Bot para extração e consulta de grades curriculares da UTFPR.
+Bot para automatizar o acesso ao currículo da UTFPR, extraindo informações sobre cursos, disciplinas, turmas e horários.
 
-## 🚀 Funcionalidades
+## Funcionalidades
 
-- Extração automática de grades curriculares da UTFPR
+- Extração automática de dados do currículo da UTFPR
 - Armazenamento em banco de dados PostgreSQL
-- Consulta de disciplinas por período
-- Cálculo de carga horária total por período
-- Atualização automática dos dados
+- API REST para consulta dos dados
+- Interface web para visualização
+- Bot do Telegram para consultas rápidas
 
-## 📋 Pré-requisitos
+## Requisitos
 
-- Python 3.8+
+- Python 3.11+
 - PostgreSQL 12+
-- Chrome/Chromium (para o Selenium)
+- Chrome/Chromium (para web scraping)
+- ChromeDriver (compatível com sua versão do Chrome)
 
-## 🔧 Instalação
+## Instalação
 
 1. Clone o repositório:
 ```bash
-git clone https://github.com/seu-usuario/turing_bot.git
-cd turing_bot
+git clone https://github.com/MatheusCunha1/Turing-bot-utfpr.git
+cd Turing-bot-utfpr
 ```
 
-2. Execute o script de setup:
+2. Instale as dependências:
 ```bash
-# Windows
-run.bat setup
-
-# Linux/Mac
-chmod +x run.sh
-./run.sh setup
+pip install -r requirements.txt
 ```
 
-O script de setup irá:
-- Criar um ambiente virtual
-- Instalar as dependências
-- Configurar o banco de dados
-- Executar os testes
+3. Configure o banco de dados:
+- Crie um banco de dados PostgreSQL
+- Copie o arquivo `.env.example` para `.env`
+- Edite o arquivo `.env` com suas configurações
 
-## 🎮 Uso
-
-O projeto possui scripts para facilitar a execução das funcionalidades:
-
-### Windows
+4. Execute as migrações:
 ```bash
-# Executar o scraper
-run.bat scraper
-
-# Consultar disciplinas do 1º período
-run.bat consulta 1
-
-# Executar o serviço de atualização
-run.bat servico
+python -m db.migrations
 ```
 
-### Linux/Mac
+## Uso
+
+1. Para extrair dados do currículo:
 ```bash
-# Executar o scraper
-./run.sh scraper
-
-# Consultar disciplinas do 1º período
-./run.sh consulta 1
-
-# Executar o serviço de atualização
-./run.sh servico
+python -m scraper.main
 ```
 
-## 🧪 Testes
-
-Os testes são executados automaticamente durante o setup. Para executar os testes manualmente:
-
+2. Para iniciar a API:
 ```bash
-# Windows
-python scripts/run_tests.py
-
-# Linux/Mac
-python3 scripts/run_tests.py
+python -m api.main
 ```
 
-## 📝 Estrutura do Projeto
+3. Para iniciar o bot do Telegram:
+```bash
+python -m bot.main
+```
+
+## Estrutura do Projeto
 
 ```
 turing_bot/
-├── core/                  # Lógica de negócio
-├── scraper/              # Módulo de scraping
-├── db/                   # Persistência
-├── bot/                  # Integração com WhatsApp
-├── config/               # Configurações
-├── scripts/              # Scripts utilitários
-└── tests/                # Testes
+├── api/            # API REST
+├── bot/            # Bot do Telegram
+├── core/           # Modelos e lógica de negócio
+├── db/             # Camada de banco de dados
+├── scraper/        # Web scraping
+├── tests/          # Testes
+└── web/            # Interface web
 ```
 
-## 🤝 Contribuindo
+## Testes
+
+Execute os testes com:
+```bash
+python -m pytest tests/ -v
+```
+
+## Contribuição
 
 1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
+2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
+3. Commit suas mudanças (`git commit -m 'Adiciona nova feature'`)
+4. Push para a branch (`git push origin feature/nova-feature`)
 5. Abra um Pull Request
 
-## 📄 Licença
+## Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes. 
+Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes. 
