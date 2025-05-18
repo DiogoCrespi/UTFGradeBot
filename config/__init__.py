@@ -1,0 +1,3 @@
+from .settings import DB_CONFIG, SCRAPING_CONFIG, BOT_CONFIG
+
+__all__ = ['DB_CONFIG', 'SCRAPING_CONFIG', 'BOT_CONFIG'] 
