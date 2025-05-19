@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import time
 from config.settings import SCRAPING_CONFIG, DB_CONFIG, SELENIUM_CONFIG
+import logging
 from scraper.navegador import Navegador
 from db.db import Database
 from db.queries import (
@@ -23,205 +24,260 @@ from db.queries import (
 )
 from core.models import Curso, Disciplina, CursoDisciplina, Turma, Horario
 
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 def get_db_connection():
-    return psycopg2.connect(
-        host=DB_CONFIG['host'],
-        port=DB_CONFIG['port'],
-        database=DB_CONFIG['database'],
-        user=DB_CONFIG['user'],
-        password=DB_CONFIG['password']
-    )
+    try:
+        return psycopg2.connect(
+            host=DB_CONFIG['host'],
+            port=DB_CONFIG['port'],
+            database=DB_CONFIG['database'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password']
+        )
+    except Exception as e:
+        logger.error(f"Erro ao conectar ao banco de dados: {str(e)}")
+        raise
 
 def setup_driver():
-    options = uc.ChromeOptions()
-    if SELENIUM_CONFIG['headless']:
-        options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    driver = uc.Chrome(options=options)
-    return driver
+    try:
+        options = uc.ChromeOptions()
+        if SELENIUM_CONFIG['headless']:
+            options.add_argument('--headless=new')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-popup-blocking')
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        
+        # Configura o caminho do ChromeDriver
+        driver_path = os.path.join(os.getcwd(), 'chromedriver', 'chromedriver.exe')
+        if not os.path.exists(driver_path):
+            logger.error(f"ChromeDriver não encontrado em: {driver_path}")
+            raise FileNotFoundError(f"ChromeDriver não encontrado em: {driver_path}")
+        
+        driver = uc.Chrome(
+            options=options,
+            driver_executable_path=driver_path,
+            version_main=120  # Especifica a versão do Chrome
+        )
+        return driver
+    except Exception as e:
+        logger.error(f"Erro ao configurar o ChromeDriver: {str(e)}")
+        raise
 
 def parse_horarios(horarios_str):
     """Converte string de horários para lista de dicionários"""
     horarios = []
-    # Remove o "+info" do final
-    horarios_str = horarios_str.replace("+info", "").strip()
-    
-    # Divide os horários
-    for horario in horarios_str.split(" - "):
-        # Extrai dia, horário e sala usando regex
-        match = re.match(r'(\d+[MTN])(\d+)(\([A-Z]\d+\))', horario.strip())
-        if match:
-            dia, num, sala = match.groups()
-            horarios.append({
-                "dia": int(dia[:-1]),  # Remove o M/T/N do final
-                "turno": dia[-1],      # Pega o M/T/N
-                "aula_inicio": int(num),
-                "aula_fim": int(num),
-                "sala": sala.strip("()")
-            })
+    try:
+        # Remove o "+info" do final
+        horarios_str = horarios_str.replace("+info", "").strip()
+        
+        # Divide os horários
+        for horario in horarios_str.split(" - "):
+            # Extrai dia, horário e sala usando regex
+            match = re.match(r'(\d+[MTN])(\d+)(\([A-Z]\d+\))', horario.strip())
+            if match:
+                dia, num, sala = match.groups()
+                horarios.append({
+                    "dia": int(dia[:-1]),  # Remove o M/T/N do final
+                    "turno": dia[-1],      # Pega o M/T/N
+                    "aula_inicio": int(num),
+                    "aula_fim": int(num),
+                    "sala": sala.strip("()")
+                })
+    except Exception as e:
+        logger.error(f"Erro ao processar horários: {str(e)}")
     return horarios
 
 def parse_disciplina(disciplina_text):
     """Extrai informações da disciplina do texto"""
-    # Exemplo: [MAT1004] Álgebra Linear (3 aulas/sem)
-    match = re.match(r'\[([A-Z0-9]+)\]\s+(.*?)\s+\((\d+)\s+aulas/sem\)', disciplina_text)
-    if match:
-        codigo, nome, aulas = match.groups()
-        return {
-            "codigo": codigo,
-            "nome": nome,
-            "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
-            "tipo": "OBRIGATORIA" if not codigo.startswith("OP") else "OPTATIVA"
-        }
+    try:
+        # Exemplo: [MAT1004] Álgebra Linear (3 aulas/sem)
+        match = re.match(r'\[([A-Z0-9]+)\]\s+(.*?)\s+\((\d+)\s+aulas/sem\)', disciplina_text)
+        if match:
+            codigo, nome, aulas = match.groups()
+            return {
+                "codigo": codigo,
+                "nome": nome,
+                "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
+                "tipo": "OBRIGATORIA" if not codigo.startswith("OP") else "OPTATIVA"
+            }
+    except Exception as e:
+        logger.error(f"Erro ao processar disciplina: {str(e)}")
     return None
 
 def parse_turma(turma_text):
     """Extrai informações da turma do texto"""
-    # Exemplo: ALI2 — Franciele Buss Frescki Kestring [ 4M3(I11) - 4M4(I11) - 4M5(I11) ]
-    match = re.match(r'([A-Z0-9]+)\s*—\s*([^[]+)\s*\[(.*?)\]', turma_text)
-    if match:
-        codigo, professor, horarios = match.groups()
-        return {
-            "codigo": codigo.strip(),
-            "professor": professor.strip(),
-            "horarios": parse_horarios(horarios)
-        }
+    try:
+        # Exemplo: ALI2 — Franciele Buss Frescki Kestring [ 4M3(I11) - 4M4(I11) - 4M5(I11) ]
+        match = re.match(r'([A-Z0-9]+)\s*—\s*([^[]+)\s*\[(.*?)\]', turma_text)
+        if match:
+            codigo, professor, horarios = match.groups()
+            return {
+                "codigo": codigo.strip(),
+                "professor": professor.strip(),
+                "horarios": parse_horarios(horarios)
+            }
+    except Exception as e:
+        logger.error(f"Erro ao processar turma: {str(e)}")
     return None
 
 def main():
-    driver = setup_driver()
-    conn = get_db_connection()
-    cur = conn.cursor()
+    driver = None
+    conn = None
+    cur = None
     
     try:
-        # Primeiro carrega a página inicial
+        logger.info("Iniciando o scraper...")
+        driver = setup_driver()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Carrega a página inicial
+        logger.info("Acessando a página inicial...")
         driver.get(SCRAPING_CONFIG['url'])
         time.sleep(5)  # Aguarda o carregamento inicial
         
-        for curso_codigo, curso_nome in SCRAPING_CONFIG['cursos'].items():
-            print(f"\nProcessando curso: {curso_codigo} - {curso_nome}")
-            
+        # Foca apenas no curso de Ciência da Computação
+        curso_codigo = '04219'
+        curso_nome = 'Ciência da Computação'
+        
+        logger.info(f"Processando curso: {curso_codigo} - {curso_nome}")
+        
+        # Tenta clicar no botão do curso usando JavaScript
+        script = f"""
+            var links = document.getElementsByTagName('a');
+            for(var i = 0; i < links.length; i++) {{
+                if(links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
+                    links[i].click();
+                    return true;
+                }}
+            }}
+            return false;
+        """
+        clicked = driver.execute_script(script)
+        
+        if not clicked:
+            logger.error(f"Não foi possível encontrar o botão para o curso {curso_codigo}")
+            return
+        
+        time.sleep(5)  # Aguarda o carregamento do curso
+        
+        # Aguarda o carregamento da página
+        WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
+            EC.presence_of_element_located((By.ID, "resultado"))
+        )
+        
+        # Insere ou atualiza o curso
+        cur.execute("""
+            INSERT INTO cursos (codigo, nome, campus)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (codigo) DO UPDATE
+            SET nome = EXCLUDED.nome,
+                campus = EXCLUDED.campus
+            RETURNING id
+        """, (curso_codigo, curso_nome, SCRAPING_CONFIG['campus']))
+        curso_id = cur.fetchone()[0]
+        
+        # Processa cada disciplina
+        disciplinas = driver.find_elements(By.CLASS_NAME, "disc")
+        for disciplina in disciplinas:
             try:
-                # Tenta clicar no botão do curso usando JavaScript
-                script = f"""
-                    var links = document.getElementsByTagName('a');
-                    for(var i = 0; i < links.length; i++) {{
-                        if(links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
-                            links[i].click();
-                            return true;
-                        }}
-                    }}
-                    return false;
-                """
-                clicked = driver.execute_script(script)
+                # Extrai informações da disciplina
+                disciplina_text = disciplina.text
+                disciplina_info = parse_disciplina(disciplina_text)
                 
-                if not clicked:
-                    print(f"Não foi possível encontrar o botão para o curso {curso_codigo}")
-                    continue
-                
-                time.sleep(5)  # Aguarda o carregamento do curso
-                
-                # Aguarda o carregamento da página
-                WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "disciplina"))
-                )
-                
-                # Extrai informações do curso
-                curso_info = driver.find_element(By.CLASS_NAME, "curso-info").text
-                
-                # Insere ou atualiza o curso
-                cur.execute("""
-                    INSERT INTO cursos (codigo, nome, campus)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (codigo) DO UPDATE
-                    SET nome = EXCLUDED.nome,
-                        campus = EXCLUDED.campus
-                    RETURNING id
-                """, (curso_codigo, curso_nome, SCRAPING_CONFIG['campus']))
-                curso_id = cur.fetchone()[0]
-                
-                # Processa cada disciplina
-                disciplinas = driver.find_elements(By.CLASS_NAME, "disciplina")
-                for disciplina in disciplinas:
-                    # Extrai informações da disciplina
-                    disciplina_text = disciplina.find_element(By.CLASS_NAME, "disciplina-nome").text
-                    disciplina_info = parse_disciplina(disciplina_text)
+                if disciplina_info:
+                    logger.info(f"Processando disciplina: {disciplina_info['codigo']} - {disciplina_info['nome']}")
                     
-                    if disciplina_info:
-                        # Insere ou atualiza a disciplina
-                        cur.execute("""
-                            INSERT INTO disciplinas 
-                            (codigo, nome, carga_horaria, tipo)
-                            VALUES (%s, %s, %s, %s)
-                            ON CONFLICT (codigo, nome) DO UPDATE
-                            SET carga_horaria = EXCLUDED.carga_horaria,
-                                tipo = EXCLUDED.tipo
-                            RETURNING id
-                        """, (
-                            disciplina_info['codigo'],
-                            disciplina_info['nome'],
-                            disciplina_info['carga_horaria'],
-                            disciplina_info['tipo']
-                        ))
-                        disciplina_id = cur.fetchone()[0]
-                        
-                        # Relaciona a disciplina com o curso
-                        cur.execute("""
-                            INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
-                            VALUES (%s, %s, 0)
-                            ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
-                        """, (curso_id, disciplina_id))
-                        
-                        # Processa as turmas da disciplina
-                        turmas = disciplina.find_elements(By.CLASS_NAME, "turma")
-                        for turma in turmas:
-                            turma_info = parse_turma(turma.text)
-                            if turma_info:
-                                # Insere ou atualiza a turma
+                    # Insere ou atualiza a disciplina
+                    cur.execute("""
+                        INSERT INTO disciplinas 
+                        (codigo, nome, carga_horaria, tipo)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (codigo, nome) DO UPDATE
+                        SET carga_horaria = EXCLUDED.carga_horaria,
+                            tipo = EXCLUDED.tipo
+                        RETURNING id
+                    """, (
+                        disciplina_info['codigo'],
+                        disciplina_info['nome'],
+                        disciplina_info['carga_horaria'],
+                        disciplina_info['tipo']
+                    ))
+                    disciplina_id = cur.fetchone()[0]
+                    
+                    # Relaciona a disciplina com o curso
+                    cur.execute("""
+                        INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
+                        VALUES (%s, %s, 0)
+                        ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
+                    """, (curso_id, disciplina_id))
+                    
+                    # Processa as turmas da disciplina
+                    # Procura as turmas que seguem esta disciplina
+                    turmas = disciplina.find_elements(By.XPATH, "following-sibling::span[@class='tur']")
+                    for turma in turmas:
+                        turma_info = parse_turma(turma.text)
+                        if turma_info:
+                            logger.info(f"  Turma: {turma_info['codigo']} - Prof: {turma_info['professor']}")
+                            
+                            # Insere ou atualiza a turma
+                            cur.execute("""
+                                INSERT INTO turmas (disciplina_id, codigo, professor)
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (disciplina_id, codigo) DO UPDATE
+                                SET professor = EXCLUDED.professor
+                                RETURNING id
+                            """, (disciplina_id, turma_info['codigo'], turma_info['professor']))
+                            turma_id = cur.fetchone()[0]
+                            
+                            # Insere os horários da turma
+                            for horario in turma_info['horarios']:
                                 cur.execute("""
-                                    INSERT INTO turmas (disciplina_id, codigo, professor)
-                                    VALUES (%s, %s, %s)
-                                    ON CONFLICT (disciplina_id, codigo) DO UPDATE
-                                    SET professor = EXCLUDED.professor
-                                    RETURNING id
-                                """, (disciplina_id, turma_info['codigo'], turma_info['professor']))
-                                turma_id = cur.fetchone()[0]
-                                
-                                # Insere os horários da turma
-                                for horario in turma_info['horarios']:
-                                    cur.execute("""
-                                        INSERT INTO horarios 
-                                        (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
-                                        VALUES (%s, %s, %s, %s, %s, %s)
-                                        ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO NOTHING
-                                    """, (
-                                        turma_id,
-                                        horario['dia'],
-                                        horario['turno'],
-                                        horario['aula_inicio'],
-                                        horario['aula_fim'],
-                                        horario['sala']
-                                    ))
-                
-                print(f"Curso {curso_codigo} processado com sucesso!")
-                
+                                    INSERT INTO horarios 
+                                    (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO NOTHING
+                                """, (
+                                    turma_id,
+                                    horario['dia'],
+                                    horario['turno'],
+                                    horario['aula_inicio'],
+                                    horario['aula_fim'],
+                                    horario['sala']
+                                ))
             except Exception as e:
-                print(f"Erro ao processar curso {curso_codigo}: {str(e)}")
+                logger.error(f"Erro ao processar disciplina: {str(e)}")
                 continue
         
         conn.commit()
-        print("\nTodos os cursos foram processados com sucesso!")
+        logger.info("Curso processado com sucesso!")
         
     except Exception as e:
-        print(f"Erro durante a extração: {str(e)}")
-        conn.rollback()
+        logger.error(f"Erro durante a extração: {str(e)}")
+        if conn:
+            conn.rollback()
     finally:
-        cur.close()
-        conn.close()
-        driver.quit()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
 
 def count_cursos():
     conn = None

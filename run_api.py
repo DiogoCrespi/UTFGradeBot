@@ -5,8 +5,8 @@ def main():
     settings = get_settings()
     uvicorn.run(
         "api.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host=settings.API_HOST,  
+        port=settings.API_PORT,  
         reload=True
     )
 
