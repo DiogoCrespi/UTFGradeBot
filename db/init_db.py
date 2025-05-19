@@ -38,6 +38,19 @@ def init_database():
     cur = conn.cursor()
     
     try:
+        # Garante que a coluna last_update exista
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name='cursos' AND column_name='last_update'
+                ) THEN
+                    ALTER TABLE cursos ADD COLUMN last_update TIMESTAMP;
+                END IF;
+            END$$;
+        """)
+
         # Criação das tabelas
         cur.execute("""
             -- Tabela de cursos
@@ -52,6 +65,7 @@ def init_database():
                 carga_horaria INTEGER NOT NULL,
                 carga_horaria_total INTEGER NOT NULL,
                 periodo_atual INTEGER NOT NULL,
+                last_update TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

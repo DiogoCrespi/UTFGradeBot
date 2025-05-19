@@ -208,6 +208,24 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
         except:
             logger.error(f"Timeout ao carregar página do curso {curso_codigo}")
             return False
+
+        # Extrai a data da última atualização
+        try:
+            last_update_text = driver.find_element(By.XPATH, "//strong[contains(text(), '/')]").text
+            last_update = datetime.strptime(last_update_text, "%d/%m/%Y %H:%M:%S")
+            
+            # Verifica se o curso já existe e compara as datas
+            cur.execute("SELECT last_update FROM cursos WHERE codigo = %s", (curso_codigo,))
+            result = cur.fetchone()
+            
+            if result and result[0]:
+                stored_last_update = result[0]
+                if stored_last_update >= last_update:
+                    logger.info(f"Curso {curso_codigo} já está atualizado. Última atualização: {stored_last_update}")
+                    return True
+        except Exception as e:
+            logger.error(f"Erro ao verificar data de atualização: {str(e)}")
+            # Se houver erro ao verificar a data, continua com o processamento
         
         # Inicia uma transação para o curso
         cur.execute("BEGIN")
@@ -215,8 +233,8 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
         try:
             # Insere ou atualiza o curso
             cur.execute("""
-                INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual, last_update)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (codigo) DO UPDATE
                 SET nome = EXCLUDED.nome,
                     modalidade = EXCLUDED.modalidade,
@@ -225,7 +243,8 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
                     duracao = EXCLUDED.duracao,
                     carga_horaria = EXCLUDED.carga_horaria,
                     carga_horaria_total = EXCLUDED.carga_horaria_total,
-                    periodo_atual = EXCLUDED.periodo_atual
+                    periodo_atual = EXCLUDED.periodo_atual,
+                    last_update = EXCLUDED.last_update
                 RETURNING id
             """, (
                 curso_codigo,
@@ -236,7 +255,8 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
                 8,  # valor padrão
                 0,  # será atualizado depois
                 0,  # será atualizado depois
-                1   # valor padrão
+                1,  # valor padrão
+                last_update
             ))
             
             curso_id = cur.fetchone()[0]
