@@ -1,16 +1,22 @@
 # Queries para manipulação de cursos
 INSERT_CURSO = """
-    INSERT INTO cursos (codigo, nome, campus)
-    VALUES (%(codigo)s, %(nome)s, %(campus)s)
+    INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual)
+    VALUES (%(codigo)s, %(nome)s, %(modalidade)s, %(campus)s, %(turno)s, %(duracao)s, %(carga_horaria)s, %(carga_horaria_total)s, %(periodo_atual)s)
     ON CONFLICT (codigo) DO UPDATE
     SET nome = EXCLUDED.nome,
+        modalidade = EXCLUDED.modalidade,
         campus = EXCLUDED.campus,
+        turno = EXCLUDED.turno,
+        duracao = EXCLUDED.duracao,
+        carga_horaria = EXCLUDED.carga_horaria,
+        carga_horaria_total = EXCLUDED.carga_horaria_total,
+        periodo_atual = EXCLUDED.periodo_atual,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id;
 """
 
 SELECT_CURSO_POR_CODIGO = """
-    SELECT id, codigo, nome, campus
+    SELECT id, codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual
     FROM cursos
     WHERE codigo = %(codigo)s;
 """

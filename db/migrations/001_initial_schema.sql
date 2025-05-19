@@ -11,10 +11,7 @@ CREATE TABLE IF NOT EXISTS disciplinas (
     codigo VARCHAR(10) PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
     carga_horaria INTEGER NOT NULL,
-    periodo INTEGER NOT NULL,
-    aulas_por_semana INTEGER NOT NULL,
-    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('OBRIGATORIA', 'OPTATIVA')),
-    curso_codigo VARCHAR(10) REFERENCES cursos(codigo)
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('OBRIGATORIA', 'OPTATIVA'))
 );
 
 -- Criação da tabela de turmas
@@ -27,6 +24,4 @@ CREATE TABLE IF NOT EXISTS turmas (
 );
 
 -- Índices
-CREATE INDEX IF NOT EXISTS idx_disciplinas_curso ON disciplinas(curso_codigo);
-CREATE INDEX IF NOT EXISTS idx_turmas_disciplina ON turmas(disciplina_codigo);
-CREATE INDEX IF NOT EXISTS idx_disciplinas_periodo ON disciplinas(periodo); 
+CREATE INDEX IF NOT EXISTS idx_turmas_disciplina ON turmas(disciplina_codigo); 

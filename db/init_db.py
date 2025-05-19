@@ -45,7 +45,13 @@ def init_database():
                 id SERIAL PRIMARY KEY,
                 codigo VARCHAR(10) NOT NULL UNIQUE,
                 nome VARCHAR(255) NOT NULL,
-                campus VARCHAR(100),
+                modalidade VARCHAR(50) NOT NULL,
+                campus VARCHAR(100) NOT NULL,
+                turno VARCHAR(50) NOT NULL,
+                duracao INTEGER NOT NULL,
+                carga_horaria INTEGER NOT NULL,
+                carga_horaria_total INTEGER NOT NULL,
+                periodo_atual INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -56,7 +62,7 @@ def init_database():
                 codigo VARCHAR(10) NOT NULL,
                 nome VARCHAR(255) NOT NULL,
                 carga_horaria INTEGER NOT NULL,
-                tipo VARCHAR(50) NOT NULL,
+                tipo VARCHAR(50) NOT NULL, -- 'OBRIGATORIA' ou 'ELETIVA'
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(codigo, nome)
@@ -79,6 +85,8 @@ def init_database():
                 disciplina_id INTEGER REFERENCES disciplinas(id),
                 codigo VARCHAR(10) NOT NULL,
                 professor VARCHAR(255),
+                vagas_totais INTEGER,
+                vagas_ocupadas INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(disciplina_id, codigo)
@@ -88,17 +96,17 @@ def init_database():
             CREATE TABLE IF NOT EXISTS horarios (
                 id SERIAL PRIMARY KEY,
                 turma_id INTEGER REFERENCES turmas(id),
-                dia_semana INTEGER NOT NULL,
-                turno VARCHAR(1) NOT NULL,
-                aula_inicio INTEGER NOT NULL,
-                aula_fim INTEGER NOT NULL,
+                dia_semana INTEGER NOT NULL, -- 1=Segunda, 2=Terça, etc.
+                turno VARCHAR(1) NOT NULL, -- 'M'=Manhã, 'T'=Tarde, 'N'=Noite
+                aula_inicio INTEGER NOT NULL, -- Número da primeira aula
+                aula_fim INTEGER NOT NULL, -- Número da última aula
                 sala VARCHAR(50),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(turma_id, dia_semana, turno, aula_inicio)
             );
 
-            -- Índices para otimização
+            -- Índices para otimização de consultas
             CREATE INDEX IF NOT EXISTS idx_curso_codigo ON cursos(codigo);
             CREATE INDEX IF NOT EXISTS idx_disciplina_codigo ON disciplinas(codigo);
             CREATE INDEX IF NOT EXISTS idx_curso_disciplinas_periodo ON curso_disciplinas(periodo);

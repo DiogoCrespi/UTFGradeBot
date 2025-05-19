@@ -19,21 +19,26 @@ class Disciplina(BaseModel):
     codigo: str = Field(..., description="Código da disciplina")
     nome: str = Field(..., description="Nome da disciplina")
     carga_horaria: int = Field(..., description="Carga horária total")
-    periodo: int = Field(..., description="Período em que a disciplina é oferecida")
-    aulas_por_semana: int = Field(..., description="Número de aulas por semana")
     tipo: str = Field(..., description="Tipo da disciplina (OBRIGATORIA ou OPTATIVA)")
-    curso_codigo: str = Field(..., description="Código do curso")
+    periodo: Optional[int] = Field(None, description="Período em que a disciplina é oferecida")
 
 class Horario(BaseModel):
-    dia: str = Field(..., description="Dia da semana (ex: 2M, 3T, 4N)")
-    horario: str = Field(..., description="Horário (ex: M1, M2, T3)")
-    sala: str = Field(..., description="Sala (ex: L22, I11, H610)")
+    id: int
+    turma_id: int
+    dia_semana: int = Field(..., description="Dia da semana (1-7)")
+    turno: str = Field(..., description="Turno (M, T, N)")
+    aula_inicio: int = Field(..., description="Número da aula de início")
+    aula_fim: int = Field(..., description="Número da aula de fim")
+    sala: str = Field(..., description="Sala")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class Turma(BaseModel):
     id: int
     codigo: str = Field(..., description="Código da turma")
     professor: str = Field(..., description="Nome do professor")
-    horarios: List[Horario] = Field(..., description="Lista de horários da turma")
+    disciplina_id: int = Field(..., description="ID da disciplina")
+    horarios: List[Horario] = Field(default_factory=list, description="Lista de horários da turma")
 
 class CargaHorariaPeriodo(BaseModel):
     periodo: int = Field(..., description="Número do período")

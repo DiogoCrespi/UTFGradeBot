@@ -5,7 +5,13 @@ CREATE TABLE IF NOT EXISTS cursos (
     id SERIAL PRIMARY KEY,
     codigo VARCHAR(10) NOT NULL UNIQUE,
     nome VARCHAR(255) NOT NULL,
-    campus VARCHAR(100),
+    modalidade VARCHAR(50) NOT NULL,
+    campus VARCHAR(100) NOT NULL,
+    turno VARCHAR(50) NOT NULL,
+    duracao INTEGER NOT NULL,
+    carga_horaria INTEGER NOT NULL,
+    carga_horaria_total INTEGER NOT NULL,
+    periodo_atual INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

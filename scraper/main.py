@@ -178,18 +178,40 @@ def main():
             EC.presence_of_element_located((By.ID, "resultado"))
         )
         
-        # Insere ou atualiza o curso
-        cur.execute("""
-            INSERT INTO cursos (codigo, nome, campus)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (codigo) DO UPDATE
-            SET nome = EXCLUDED.nome,
-                campus = EXCLUDED.campus
-            RETURNING id
-        """, (curso_codigo, curso_nome, SCRAPING_CONFIG['campus']))
-        curso_id = cur.fetchone()[0]
+        # Insere ou atualiza o curso em uma transação separada
+        try:
+            cur.execute("""
+                INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (codigo) DO UPDATE
+                SET nome = EXCLUDED.nome,
+                    modalidade = EXCLUDED.modalidade,
+                    campus = EXCLUDED.campus,
+                    turno = EXCLUDED.turno,
+                    duracao = EXCLUDED.duracao,
+                    carga_horaria = EXCLUDED.carga_horaria,
+                    carga_horaria_total = EXCLUDED.carga_horaria_total,
+                    periodo_atual = EXCLUDED.periodo_atual
+                RETURNING id
+            """, (
+                curso_codigo,
+                curso_nome,
+                'PRESENCIAL',  # valor padrão
+                SCRAPING_CONFIG['campus'],
+                'INTEGRAL',    # valor padrão
+                8,             # valor padrão
+                0,             # valor padrão
+                0,             # valor padrão
+                1              # valor padrão
+            ))
+            curso_id = cur.fetchone()[0]
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Erro ao inserir curso: {str(e)}")
+            raise
         
-        # Processa cada disciplina
+        # Processa cada disciplina em transações separadas
         disciplinas = driver.find_elements(By.CLASS_NAME, "disc")
         for disciplina in disciplinas:
             try:
@@ -200,68 +222,73 @@ def main():
                 if disciplina_info:
                     logger.info(f"Processando disciplina: {disciplina_info['codigo']} - {disciplina_info['nome']}")
                     
-                    # Insere ou atualiza a disciplina
-                    cur.execute("""
-                        INSERT INTO disciplinas 
-                        (codigo, nome, carga_horaria, tipo)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (codigo, nome) DO UPDATE
-                        SET carga_horaria = EXCLUDED.carga_horaria,
-                            tipo = EXCLUDED.tipo
-                        RETURNING id
-                    """, (
-                        disciplina_info['codigo'],
-                        disciplina_info['nome'],
-                        disciplina_info['carga_horaria'],
-                        disciplina_info['tipo']
-                    ))
-                    disciplina_id = cur.fetchone()[0]
-                    
-                    # Relaciona a disciplina com o curso
-                    cur.execute("""
-                        INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
-                        VALUES (%s, %s, 0)
-                        ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
-                    """, (curso_id, disciplina_id))
-                    
-                    # Processa as turmas da disciplina
-                    # Procura as turmas que seguem esta disciplina
-                    turmas = disciplina.find_elements(By.XPATH, "following-sibling::span[@class='tur']")
-                    for turma in turmas:
-                        turma_info = parse_turma(turma.text)
-                        if turma_info:
-                            logger.info(f"  Turma: {turma_info['codigo']} - Prof: {turma_info['professor']}")
-                            
-                            # Insere ou atualiza a turma
-                            cur.execute("""
-                                INSERT INTO turmas (disciplina_id, codigo, professor)
-                                VALUES (%s, %s, %s)
-                                ON CONFLICT (disciplina_id, codigo) DO UPDATE
-                                SET professor = EXCLUDED.professor
-                                RETURNING id
-                            """, (disciplina_id, turma_info['codigo'], turma_info['professor']))
-                            turma_id = cur.fetchone()[0]
-                            
-                            # Insere os horários da turma
-                            for horario in turma_info['horarios']:
+                    # Insere ou atualiza a disciplina em uma transação separada
+                    try:
+                        cur.execute("""
+                            INSERT INTO disciplinas (codigo, nome, carga_horaria, tipo)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (codigo, nome) DO UPDATE SET
+                                carga_horaria = EXCLUDED.carga_horaria,
+                                tipo = EXCLUDED.tipo
+                            RETURNING id
+                        """, (
+                            disciplina_info['codigo'],
+                            disciplina_info['nome'],
+                            disciplina_info['carga_horaria'],
+                            disciplina_info['tipo']
+                        ))
+                        disciplina_id = cur.fetchone()[0]
+                        
+                        # Relaciona a disciplina com o curso
+                        cur.execute("""
+                            INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
+                            VALUES (%s, %s, 0)
+                            ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
+                        """, (curso_id, disciplina_id))
+                        
+                        # Processa as turmas da disciplina
+                        # Procura as turmas que seguem esta disciplina
+                        turmas = disciplina.find_elements(By.XPATH, "following-sibling::span[@class='tur']")
+                        for turma in turmas:
+                            turma_info = parse_turma(turma.text)
+                            if turma_info:
+                                logger.info(f"  Turma: {turma_info['codigo']} - Prof: {turma_info['professor']}")
+                                
+                                # Insere ou atualiza a turma
                                 cur.execute("""
-                                    INSERT INTO horarios 
-                                    (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
-                                    VALUES (%s, %s, %s, %s, %s, %s)
-                                    ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO NOTHING
-                                """, (
-                                    turma_id,
-                                    horario['dia'],
-                                    horario['turno'],
-                                    horario['aula_inicio'],
-                                    horario['aula_fim'],
-                                    horario['sala']
-                                ))
+                                    INSERT INTO turmas (disciplina_id, codigo, professor)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (disciplina_id, codigo) DO UPDATE
+                                    SET professor = EXCLUDED.professor
+                                    RETURNING id
+                                """, (disciplina_id, turma_info['codigo'], turma_info['professor']))
+                                turma_id = cur.fetchone()[0]
+                                
+                                # Insere os horários da turma
+                                for horario in turma_info['horarios']:
+                                    cur.execute("""
+                                        INSERT INTO horarios 
+                                        (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
+                                        VALUES (%s, %s, %s, %s, %s, %s)
+                                        ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO NOTHING
+                                    """, (
+                                        turma_id,
+                                        horario['dia'],
+                                        horario['turno'],
+                                        horario['aula_inicio'],
+                                        horario['aula_fim'],
+                                        horario['sala']
+                                    ))
+                        
+                        conn.commit()
+                    except Exception as e:
+                        conn.rollback()
+                        logger.error(f"Erro ao processar disciplina {disciplina_info['codigo']}: {str(e)}")
+                        continue
             except Exception as e:
                 logger.error(f"Erro ao processar disciplina: {str(e)}")
                 continue
         
-        conn.commit()
         logger.info("Curso processado com sucesso!")
         
     except Exception as e:
