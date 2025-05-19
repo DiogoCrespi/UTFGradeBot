@@ -94,10 +94,10 @@ def parse_horarios(horarios_str):
                 dia, num, sala = match.groups()
                 horarios.append({
                     "dia": int(dia[:-1]),  # Remove o M/T/N do final
-                    "turno": dia[-1],      # Pega o M/T/N
+                    "turno": str(dia[-1]),  # Pega o M/T/N e garante que é string
                     "aula_inicio": int(num),
                     "aula_fim": int(num),
-                    "sala": sala.strip("()")
+                    "sala": str(sala.strip("()"))  # Garante que é string
                 })
     except Exception as e:
         logger.error(f"Erro ao processar horários: {str(e)}")
@@ -112,16 +112,17 @@ def parse_disciplina(disciplina_text):
         if match:
             codigo, nome, aulas = match.groups()
             return {
-                "codigo": codigo,
-                "nome": nome,
+                "codigo": str(codigo),  # Garante que é string
+                "nome": str(nome),      # Garante que é string
                 "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
-                "tipo": "OBRIGATORIA" if not codigo.startswith("OP") else "OPTATIVA"
+                "tipo": "OBRIGATORIA" if not str(codigo).startswith("OP") else "OPTATIVA"
             }
         else:
             logger.warning(f"Formato inválido de disciplina: {disciplina_text}")
+            return None
     except Exception as e:
         logger.error(f"Erro ao processar disciplina: {str(e)}")
-    return None
+        return None
 
 def parse_turma(turma_text):
     """Extrai informações da turma do texto"""
@@ -131,13 +132,13 @@ def parse_turma(turma_text):
         if match:
             codigo, professor, horarios = match.groups()
             return {
-                "codigo": codigo.strip(),
-                "professor": professor.strip(),
+                "codigo": str(codigo.strip()),  # Garante que é string
+                "professor": str(professor.strip()),  # Garante que é string
                 "horarios": parse_horarios(horarios)
             }
     except Exception as e:
         logger.error(f"Erro ao processar turma: {str(e)}")
-    return None
+        return None
 
 def handle_popup(driver):
     """Lida com popups do navegador"""
@@ -159,11 +160,9 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
         
         # Tenta clicar no botão do curso usando JavaScript
         script = f"""
-            var div = document.getElementById('medianeira');
-            if (!div) return false;
-            var links = div.getElementsByTagName('a');
+            var links = document.getElementsByTagName('a');
             for(var i = 0; i < links.length; i++) {{
-                if(links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
+                if(links[i].href && links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
                     links[i].click();
                     return true;
                 }}
@@ -315,9 +314,9 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
                         # Relaciona a disciplina com o curso
                         cur.execute("""
                             INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
-                            VALUES (%s, %s, 0)
+                            VALUES (%s, %s, %s)
                             ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
-                        """, (curso_id, disciplina_id))
+                        """, (curso_id, disciplina_id, 0))
                         
                         # Processa as turmas da disciplina
                         turmas = disciplina.find_elements(By.XPATH, "following-sibling::span[@class='tur']")
