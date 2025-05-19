@@ -389,6 +389,105 @@ def process_curso(driver, curso_codigo, curso_nome, cur):
         logger.error(f"Erro ao processar curso {curso_codigo}: {str(e)}")
         return False
 
+def process_campus(driver, campus_id, campus_nome, cur):
+    """Processa todos os cursos de um campus específico"""
+    try:
+        logger.info(f"Processando campus: {campus_nome}")
+        
+        # Clica no botão do campus
+        script = f"""
+            var h3 = document.querySelector('h3[onclick="treeView(\\'{campus_id}\\');"]');
+            if (h3) {{
+                h3.click();
+                return true;
+            }}
+            return false;
+        """
+        clicked = driver.execute_script(script)
+        
+        if not clicked:
+            logger.error(f"Não foi possível encontrar o botão para o campus {campus_nome}")
+            return False
+        
+        time.sleep(5)  # Aguarda o carregamento do campus
+        
+        # Extrai todos os cursos do campus
+        cursos = driver.find_elements(By.CSS_SELECTOR, f"#{campus_id} a")
+        cursos_processados = 0
+        
+        # Armazena os links dos cursos antes de processá-los
+        curso_links = []
+        for curso_element in cursos:
+            try:
+                href = curso_element.get_attribute('href')
+                if 'CODIGO_CURSO=' in href:
+                    curso_codigo = href.split('CODIGO_CURSO=')[1]
+                    curso_nome = curso_element.text.strip()
+                    curso_links.append((curso_codigo, curso_nome))
+            except Exception as e:
+                logger.error(f"Erro ao extrair informações do curso: {str(e)}")
+                continue
+        
+        # Processa cada curso usando os links armazenados
+        for curso_codigo, curso_nome in curso_links:
+            try:
+                # Processa o curso
+                success = process_curso(driver, curso_codigo, curso_nome, cur)
+                if success:
+                    cursos_processados += 1
+                    logger.info(f"Curso {curso_codigo} processado com sucesso")
+                else:
+                    logger.warning(f"Falha ao processar curso {curso_codigo}")
+                
+                # Volta para a página inicial
+                driver.get(SCRAPING_CONFIG['url'])
+                time.sleep(5)
+                
+                # Clica no campus novamente
+                driver.execute_script(script)
+                time.sleep(5)
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar curso do campus {campus_nome}: {str(e)}")
+                continue
+        
+        logger.info(f"Campus {campus_nome} processado. {cursos_processados} cursos processados com sucesso.")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Erro ao processar campus {campus_nome}: {str(e)}")
+        return False
+
+def check_global_update(driver):
+    """Verifica a última atualização global do sistema"""
+    try:
+        last_update_element = driver.find_element(By.ID, "last_update")
+        if last_update_element:
+            last_update_text = last_update_element.text
+            last_update = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
+            
+            # Verifica se já temos essa atualização no banco
+            cur = get_db_connection().cursor()
+            cur.execute("SELECT last_update FROM global_updates ORDER BY last_update DESC LIMIT 1")
+            result = cur.fetchone()
+            
+            if result and result[0] >= last_update:
+                logger.info(f"Sistema já está atualizado. Última atualização: {result[0]}")
+                return False
+            
+            # Registra a nova atualização
+            cur.execute("""
+                INSERT INTO global_updates (last_update)
+                VALUES (%s)
+            """, (last_update,))
+            cur.connection.commit()
+            logger.info(f"Nova atualização detectada: {last_update}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Erro ao verificar atualização global: {str(e)}")
+        return True  # Em caso de erro, assume que precisa atualizar
+
 def main():
     driver = None
     conn = None
@@ -405,39 +504,26 @@ def main():
         driver.get(SCRAPING_CONFIG['url'])
         time.sleep(5)  # Aguarda o carregamento inicial
         
-        # Processa cada curso
-        for curso_codigo, curso_nome in SCRAPING_CONFIG['cursos'].items():
+        # Verifica a última atualização global
+        # if not check_global_update(driver):
+        #     logger.info("Nenhuma atualização necessária.")
+        #     return
+        
+        # Processa cada campus
+        for campus_id, campus_nome in SCRAPING_CONFIG['campus'].items():
             try:
-                success = process_curso(driver, curso_codigo, curso_nome, cur)
+                success = process_campus(driver, campus_id, campus_nome, cur)
                 if success:
-                    logger.info(f"Curso {curso_codigo} processado com sucesso")
+                    logger.info(f"Campus {campus_nome} processado com sucesso")
                 else:
-                    logger.warning(f"Falha ao processar curso {curso_codigo}")
+                    logger.warning(f"Falha ao processar campus {campus_nome}")
                 
                 # Volta para a página inicial
                 driver.get(SCRAPING_CONFIG['url'])
                 time.sleep(5)
                 
-                # Verifica popup de confirmação ao voltar
-                try:
-                    alert = driver.switch_to.alert
-                    alert.accept()
-                except:
-                    pass
-                    
             except Exception as e:
-                logger.error(f"Erro ao processar curso {curso_codigo}: {str(e)}")
-                # Tenta voltar para a página inicial mesmo se houver erro
-                try:
-                    driver.get(SCRAPING_CONFIG['url'])
-                    time.sleep(5)
-                    try:
-                        alert = driver.switch_to.alert
-                        alert.accept()
-                    except:
-                        pass
-                except:
-                    pass
+                logger.error(f"Erro ao processar campus {campus_nome}: {str(e)}")
                 continue
         
     except Exception as e:
@@ -448,10 +534,7 @@ def main():
         if conn:
             conn.close()
         if driver:
-            try:
-                driver.quit()
-            except:
-                pass
+            driver.quit()
 
 def count_cursos():
     conn = None
