@@ -6,19 +6,30 @@ load_dotenv()
 
 # Configurações do Banco de Dados
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'database': os.getenv('DB_NAME', 'turing_bot'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', '')
+    'host': 'localhost',
+    'port': '5432',
+    'database': 'turing_bot',
+    'user': 'postgres',
+    'password': '1597'
 }
 
 # Configurações do Web Scraping
 SCRAPING_CONFIG = {
-    'url': os.getenv('UTFPR_URL', 'https://gradenahora.com.br/utfpr/grade_na_hora.html'),
-    'curso_codigo': os.getenv('CURSO_CODIGO', '04219'),
-    'headless': os.getenv('SELENIUM_HEADLESS', 'true').lower() == 'true',
-    'timeout': int(os.getenv('SELENIUM_TIMEOUT', '30'))
+    'url': 'https://gradenahora.com.br/utfpr/grade_na_hora.html',
+    'campus': 'Medianeira',
+    'cursos': {
+        '04219': 'Ciência da Computação',
+        '04105': 'Tecnologia em Informática',
+        '04158': 'Tecnologia em Desenvolvimento de Sistemas',
+        '04176': 'Tecnologia em Análise e Desenvolvimento de Sistemas'
+    }
+}
+
+# Configurações do Selenium
+SELENIUM_CONFIG = {
+    'headless': False,  # Desabilitado para debug
+    'timeout': 30,
+    'wait_time': 5
 }
 
 # Configurações do Bot (futuro)

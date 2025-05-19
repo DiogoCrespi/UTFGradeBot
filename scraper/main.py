@@ -1,8 +1,16 @@
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import os
+import json
+import re
+from datetime import datetime
+import psycopg2
+from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 import time
-from config.settings import SCRAPING_CONFIG
+from config.settings import SCRAPING_CONFIG, DB_CONFIG, SELENIUM_CONFIG
 from scraper.navegador import Navegador
 from db.db import Database
 from db.queries import (
@@ -15,6 +23,228 @@ from db.queries import (
 )
 from core.models import Curso, Disciplina, CursoDisciplina, Turma, Horario
 
+load_dotenv()
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=DB_CONFIG['host'],
+        port=DB_CONFIG['port'],
+        database=DB_CONFIG['database'],
+        user=DB_CONFIG['user'],
+        password=DB_CONFIG['password']
+    )
+
+def setup_driver():
+    options = uc.ChromeOptions()
+    if SELENIUM_CONFIG['headless']:
+        options.add_argument('--headless=new')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    driver = uc.Chrome(options=options)
+    return driver
+
+def parse_horarios(horarios_str):
+    """Converte string de horários para lista de dicionários"""
+    horarios = []
+    # Remove o "+info" do final
+    horarios_str = horarios_str.replace("+info", "").strip()
+    
+    # Divide os horários
+    for horario in horarios_str.split(" - "):
+        # Extrai dia, horário e sala usando regex
+        match = re.match(r'(\d+[MTN])(\d+)(\([A-Z]\d+\))', horario.strip())
+        if match:
+            dia, num, sala = match.groups()
+            horarios.append({
+                "dia": int(dia[:-1]),  # Remove o M/T/N do final
+                "turno": dia[-1],      # Pega o M/T/N
+                "aula_inicio": int(num),
+                "aula_fim": int(num),
+                "sala": sala.strip("()")
+            })
+    return horarios
+
+def parse_disciplina(disciplina_text):
+    """Extrai informações da disciplina do texto"""
+    # Exemplo: [MAT1004] Álgebra Linear (3 aulas/sem)
+    match = re.match(r'\[([A-Z0-9]+)\]\s+(.*?)\s+\((\d+)\s+aulas/sem\)', disciplina_text)
+    if match:
+        codigo, nome, aulas = match.groups()
+        return {
+            "codigo": codigo,
+            "nome": nome,
+            "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
+            "tipo": "OBRIGATORIA" if not codigo.startswith("OP") else "OPTATIVA"
+        }
+    return None
+
+def parse_turma(turma_text):
+    """Extrai informações da turma do texto"""
+    # Exemplo: ALI2 — Franciele Buss Frescki Kestring [ 4M3(I11) - 4M4(I11) - 4M5(I11) ]
+    match = re.match(r'([A-Z0-9]+)\s*—\s*([^[]+)\s*\[(.*?)\]', turma_text)
+    if match:
+        codigo, professor, horarios = match.groups()
+        return {
+            "codigo": codigo.strip(),
+            "professor": professor.strip(),
+            "horarios": parse_horarios(horarios)
+        }
+    return None
+
+def main():
+    driver = setup_driver()
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Primeiro carrega a página inicial
+        driver.get(SCRAPING_CONFIG['url'])
+        time.sleep(5)  # Aguarda o carregamento inicial
+        
+        for curso_codigo, curso_nome in SCRAPING_CONFIG['cursos'].items():
+            print(f"\nProcessando curso: {curso_codigo} - {curso_nome}")
+            
+            try:
+                # Tenta clicar no botão do curso usando JavaScript
+                script = f"""
+                    var links = document.getElementsByTagName('a');
+                    for(var i = 0; i < links.length; i++) {{
+                        if(links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
+                            links[i].click();
+                            return true;
+                        }}
+                    }}
+                    return false;
+                """
+                clicked = driver.execute_script(script)
+                
+                if not clicked:
+                    print(f"Não foi possível encontrar o botão para o curso {curso_codigo}")
+                    continue
+                
+                time.sleep(5)  # Aguarda o carregamento do curso
+                
+                # Aguarda o carregamento da página
+                WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "disciplina"))
+                )
+                
+                # Extrai informações do curso
+                curso_info = driver.find_element(By.CLASS_NAME, "curso-info").text
+                
+                # Insere ou atualiza o curso
+                cur.execute("""
+                    INSERT INTO cursos (codigo, nome, campus)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (codigo) DO UPDATE
+                    SET nome = EXCLUDED.nome,
+                        campus = EXCLUDED.campus
+                    RETURNING id
+                """, (curso_codigo, curso_nome, SCRAPING_CONFIG['campus']))
+                curso_id = cur.fetchone()[0]
+                
+                # Processa cada disciplina
+                disciplinas = driver.find_elements(By.CLASS_NAME, "disciplina")
+                for disciplina in disciplinas:
+                    # Extrai informações da disciplina
+                    disciplina_text = disciplina.find_element(By.CLASS_NAME, "disciplina-nome").text
+                    disciplina_info = parse_disciplina(disciplina_text)
+                    
+                    if disciplina_info:
+                        # Insere ou atualiza a disciplina
+                        cur.execute("""
+                            INSERT INTO disciplinas 
+                            (codigo, nome, carga_horaria, tipo)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (codigo, nome) DO UPDATE
+                            SET carga_horaria = EXCLUDED.carga_horaria,
+                                tipo = EXCLUDED.tipo
+                            RETURNING id
+                        """, (
+                            disciplina_info['codigo'],
+                            disciplina_info['nome'],
+                            disciplina_info['carga_horaria'],
+                            disciplina_info['tipo']
+                        ))
+                        disciplina_id = cur.fetchone()[0]
+                        
+                        # Relaciona a disciplina com o curso
+                        cur.execute("""
+                            INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
+                            VALUES (%s, %s, 0)
+                            ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
+                        """, (curso_id, disciplina_id))
+                        
+                        # Processa as turmas da disciplina
+                        turmas = disciplina.find_elements(By.CLASS_NAME, "turma")
+                        for turma in turmas:
+                            turma_info = parse_turma(turma.text)
+                            if turma_info:
+                                # Insere ou atualiza a turma
+                                cur.execute("""
+                                    INSERT INTO turmas (disciplina_id, codigo, professor)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (disciplina_id, codigo) DO UPDATE
+                                    SET professor = EXCLUDED.professor
+                                    RETURNING id
+                                """, (disciplina_id, turma_info['codigo'], turma_info['professor']))
+                                turma_id = cur.fetchone()[0]
+                                
+                                # Insere os horários da turma
+                                for horario in turma_info['horarios']:
+                                    cur.execute("""
+                                        INSERT INTO horarios 
+                                        (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
+                                        VALUES (%s, %s, %s, %s, %s, %s)
+                                        ON CONFLICT (turma_id, dia_semana, turno, aula_inicio) DO NOTHING
+                                    """, (
+                                        turma_id,
+                                        horario['dia'],
+                                        horario['turno'],
+                                        horario['aula_inicio'],
+                                        horario['aula_fim'],
+                                        horario['sala']
+                                    ))
+                
+                print(f"Curso {curso_codigo} processado com sucesso!")
+                
+            except Exception as e:
+                print(f"Erro ao processar curso {curso_codigo}: {str(e)}")
+                continue
+        
+        conn.commit()
+        print("\nTodos os cursos foram processados com sucesso!")
+        
+    except Exception as e:
+        print(f"Erro durante a extração: {str(e)}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+        driver.quit()
+
+def count_cursos():
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM cursos;")
+        count = cur.fetchone()[0]
+        print(f"Número de cursos na tabela: {count}")
+    except Exception as e:
+        print(f"Erro ao contar cursos: {str(e)}")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    main()
+
+# --- Classe Scraper desativada pois depende de 'curso_codigo' e não é usada no fluxo principal ---
+'''
 class Scraper:
     def __init__(self):
         self.db = Database()
@@ -214,9 +444,10 @@ class Scraper:
                         'aula_inicio': horario.aula_inicio,
                         'aula_fim': horario.aula_fim,
                         'sala': horario.sala
-                    }
-                )
+                }
+            )
 
 if __name__ == '__main__':
     scraper = Scraper()
-    scraper.extrair_dados() 
+    scraper.extrair_dados()
+''' 
