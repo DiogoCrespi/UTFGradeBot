@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -103,6 +107,7 @@ def parse_disciplina(disciplina_text):
     """Extrai informações da disciplina do texto"""
     try:
         # Exemplo: [MAT1004] Álgebra Linear (3 aulas/sem)
+        # Atualizado para capturar códigos de qualquer tamanho
         match = re.match(r'\[([A-Z0-9]+)\]\s+(.*?)\s+\((\d+)\s+aulas/sem\)', disciplina_text)
         if match:
             codigo, nome, aulas = match.groups()
@@ -112,6 +117,8 @@ def parse_disciplina(disciplina_text):
                 "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
                 "tipo": "OBRIGATORIA" if not codigo.startswith("OP") else "OPTATIVA"
             }
+        else:
+            logger.warning(f"Formato inválido de disciplina: {disciplina_text}")
     except Exception as e:
         logger.error(f"Erro ao processar disciplina: {str(e)}")
     return None
@@ -132,31 +139,29 @@ def parse_turma(turma_text):
         logger.error(f"Erro ao processar turma: {str(e)}")
     return None
 
-def main():
-    driver = None
-    conn = None
-    cur = None
-    
+def handle_popup(driver):
+    """Lida com popups do navegador"""
     try:
-        logger.info("Iniciando o scraper...")
-        driver = setup_driver()
-        conn = get_db_connection()
-        cur = conn.cursor()
+        # Aguarda um curto período para o popup aparecer
+        time.sleep(1)
         
-        # Carrega a página inicial
-        logger.info("Acessando a página inicial...")
-        driver.get(SCRAPING_CONFIG['url'])
-        time.sleep(5)  # Aguarda o carregamento inicial
-        
-        # Foca apenas no curso de Ciência da Computação
-        curso_codigo = '04219'
-        curso_nome = 'Ciência da Computação'
-        
+        # Tenta encontrar e aceitar o popup
+        alert = driver.switch_to.alert
+        alert.accept()
+        return True
+    except:
+        return False
+
+def process_curso(driver, curso_codigo, curso_nome, cur):
+    """Processa um curso específico"""
+    try:
         logger.info(f"Processando curso: {curso_codigo} - {curso_nome}")
         
         # Tenta clicar no botão do curso usando JavaScript
         script = f"""
-            var links = document.getElementsByTagName('a');
+            var div = document.getElementById('medianeira');
+            if (!div) return false;
+            var links = div.getElementsByTagName('a');
             for(var i = 0; i < links.length; i++) {{
                 if(links[i].href.includes('CODIGO_CURSO={curso_codigo}')) {{
                     links[i].click();
@@ -169,17 +174,46 @@ def main():
         
         if not clicked:
             logger.error(f"Não foi possível encontrar o botão para o curso {curso_codigo}")
-            return
+            return False
         
         time.sleep(5)  # Aguarda o carregamento do curso
         
-        # Aguarda o carregamento da página
-        WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
-            EC.presence_of_element_located((By.ID, "resultado"))
-        )
-        
-        # Insere ou atualiza o curso em uma transação separada
+        # Verifica se há popup de erro
         try:
+            alert = driver.switch_to.alert
+            alert_text = alert.text
+            logger.warning(f"Alerta encontrado: {alert_text}")
+            alert.accept()
+            
+            if "não está disponível no GNH" in alert_text:
+                logger.warning(f"Curso {curso_codigo} não está disponível no momento")
+                return False
+        except:
+            pass  # Se não houver alerta, continua normalmente
+            
+        # Verifica se há mensagem de erro "este curso não está disponível no GNH"
+        try:
+            error_message = driver.find_element(By.XPATH, "//*[contains(text(), 'este curso não está disponível no GNH')]")
+            if error_message:
+                logger.warning(f"Curso {curso_codigo} não está disponível no GNH")
+                return False
+        except:
+            pass  # Se não encontrar a mensagem de erro, continua normalmente
+        
+        # Aguarda o carregamento da página
+        try:
+            WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
+                EC.presence_of_element_located((By.ID, "resultado"))
+            )
+        except:
+            logger.error(f"Timeout ao carregar página do curso {curso_codigo}")
+            return False
+        
+        # Inicia uma transação para o curso
+        cur.execute("BEGIN")
+        
+        try:
+            # Insere ou atualiza o curso
             cur.execute("""
                 INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -196,34 +230,50 @@ def main():
             """, (
                 curso_codigo,
                 curso_nome,
-                'PRESENCIAL',  # valor padrão
+                'PRESENCIAL',
                 SCRAPING_CONFIG['campus'],
-                'INTEGRAL',    # valor padrão
-                8,             # valor padrão
-                0,             # valor padrão
-                0,             # valor padrão
-                1              # valor padrão
+                'INTEGRAL',  # valor padrão
+                8,  # valor padrão
+                0,  # será atualizado depois
+                0,  # será atualizado depois
+                1   # valor padrão
             ))
+            
             curso_id = cur.fetchone()[0]
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Erro ao inserir curso: {str(e)}")
-            raise
-        
-        # Processa cada disciplina em transações separadas
-        disciplinas = driver.find_elements(By.CLASS_NAME, "disc")
-        for disciplina in disciplinas:
-            try:
-                # Extrai informações da disciplina
-                disciplina_text = disciplina.text
-                disciplina_info = parse_disciplina(disciplina_text)
-                
-                if disciplina_info:
-                    logger.info(f"Processando disciplina: {disciplina_info['codigo']} - {disciplina_info['nome']}")
+            
+            # Processa as disciplinas e turmas
+            disciplinas = driver.find_elements(By.CLASS_NAME, "disc")
+            carga_horaria_total = 0
+            
+            # Ordena as disciplinas pelo código
+            disciplinas.sort(key=lambda x: x.text.split(']')[0].strip('['))
+            
+            # Lista para armazenar os códigos das disciplinas processadas
+            disciplinas_processadas = []
+            disciplinas_com_erro = []
+            
+            for disciplina in disciplinas:
+                try:
+                    # Inicia uma transação para cada disciplina
+                    cur.execute("SAVEPOINT disciplina")
                     
-                    # Insere ou atualiza a disciplina em uma transação separada
-                    try:
+                    # Extrai informações da disciplina
+                    disciplina_text = disciplina.text
+                    disciplina_info = parse_disciplina(disciplina_text)
+                    
+                    if disciplina_info:
+                        codigo_disciplina = disciplina_info['codigo']
+                        logger.info(f"Processando disciplina: {codigo_disciplina} - {disciplina_info['nome']}")
+                        
+                        # Verifica se a disciplina já foi processada
+                        if codigo_disciplina in disciplinas_processadas:
+                            logger.warning(f"Disciplina {codigo_disciplina} já foi processada anteriormente")
+                            cur.execute("ROLLBACK TO SAVEPOINT disciplina")
+                            continue
+                        
+                        disciplinas_processadas.append(codigo_disciplina)
+                        
+                        # Insere ou atualiza a disciplina
                         cur.execute("""
                             INSERT INTO disciplinas (codigo, nome, carga_horaria, tipo)
                             VALUES (%s, %s, %s, %s)
@@ -239,6 +289,9 @@ def main():
                         ))
                         disciplina_id = cur.fetchone()[0]
                         
+                        # Atualiza a carga horária total
+                        carga_horaria_total += disciplina_info['carga_horaria']
+                        
                         # Relaciona a disciplina com o curso
                         cur.execute("""
                             INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
@@ -247,7 +300,6 @@ def main():
                         """, (curso_id, disciplina_id))
                         
                         # Processa as turmas da disciplina
-                        # Procura as turmas que seguem esta disciplina
                         turmas = disciplina.find_elements(By.XPATH, "following-sibling::span[@class='tur']")
                         for turma in turmas:
                             turma_info = parse_turma(turma.text)
@@ -280,21 +332,96 @@ def main():
                                         horario['sala']
                                     ))
                         
-                        conn.commit()
-                    except Exception as e:
-                        conn.rollback()
-                        logger.error(f"Erro ao processar disciplina {disciplina_info['codigo']}: {str(e)}")
-                        continue
+                        # Commit da transação da disciplina
+                        cur.execute("RELEASE SAVEPOINT disciplina")
+                
+                except Exception as e:
+                    logger.error(f"Erro ao processar disciplina: {str(e)}")
+                    if disciplina_info:
+                        disciplinas_com_erro.append(disciplina_info['codigo'])
+                    # Rollback da transação da disciplina
+                    cur.execute("ROLLBACK TO SAVEPOINT disciplina")
+                    continue
+            
+            # Log final do processamento
+            logger.info(f"Processamento do curso {curso_codigo} finalizado:")
+            logger.info(f"- Total de disciplinas processadas: {len(disciplinas_processadas)}")
+            if disciplinas_com_erro:
+                logger.warning(f"- Disciplinas com erro: {', '.join(disciplinas_com_erro)}")
+            
+            # Atualiza a carga horária total do curso
+            cur.execute("""
+                UPDATE cursos 
+                SET carga_horaria_total = %s
+                WHERE id = %s
+            """, (carga_horaria_total, curso_id))
+            
+            # Commit da transação principal
+            cur.execute("COMMIT")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erro ao processar curso {curso_codigo}: {str(e)}")
+            cur.execute("ROLLBACK")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Erro ao processar curso {curso_codigo}: {str(e)}")
+        return False
+
+def main():
+    driver = None
+    conn = None
+    cur = None
+    
+    try:
+        logger.info("Iniciando o scraper...")
+        driver = setup_driver()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Carrega a página inicial
+        logger.info("Acessando a página inicial...")
+        driver.get(SCRAPING_CONFIG['url'])
+        time.sleep(5)  # Aguarda o carregamento inicial
+        
+        # Processa cada curso
+        for curso_codigo, curso_nome in SCRAPING_CONFIG['cursos'].items():
+            try:
+                success = process_curso(driver, curso_codigo, curso_nome, cur)
+                if success:
+                    logger.info(f"Curso {curso_codigo} processado com sucesso")
+                else:
+                    logger.warning(f"Falha ao processar curso {curso_codigo}")
+                
+                # Volta para a página inicial
+                driver.get(SCRAPING_CONFIG['url'])
+                time.sleep(5)
+                
+                # Verifica popup de confirmação ao voltar
+                try:
+                    alert = driver.switch_to.alert
+                    alert.accept()
+                except:
+                    pass
+                    
             except Exception as e:
-                logger.error(f"Erro ao processar disciplina: {str(e)}")
+                logger.error(f"Erro ao processar curso {curso_codigo}: {str(e)}")
+                # Tenta voltar para a página inicial mesmo se houver erro
+                try:
+                    driver.get(SCRAPING_CONFIG['url'])
+                    time.sleep(5)
+                    try:
+                        alert = driver.switch_to.alert
+                        alert.accept()
+                    except:
+                        pass
+                except:
+                    pass
                 continue
         
-        logger.info("Curso processado com sucesso!")
-        
     except Exception as e:
-        logger.error(f"Erro durante a extração: {str(e)}")
-        if conn:
-            conn.rollback()
+        logger.error(f"Erro durante a execução do scraper: {str(e)}")
     finally:
         if cur:
             cur.close()

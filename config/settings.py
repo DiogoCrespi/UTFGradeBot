@@ -18,10 +18,28 @@ SCRAPING_CONFIG = {
     'url': 'https://gradenahora.com.br/utfpr/grade_na_hora.html',
     'campus': 'Medianeira',
     'cursos': {
-        '04219': 'Ciência da Computação',
+        '04103': 'Tecnologia Ambiental',
+        '04104': 'Tecnologia Eletromecânica',
         '04105': 'Tecnologia em Informática',
+        '04154': 'Tecnologia em Gestão Ambiental',
+        '04155': 'Tecnologia em Manutenção Eletromecânica',
+        '04156': 'Tecnologia em Laticínios',
+        '04157': 'Tecnologia em Indústria de Carnes',
         '04158': 'Tecnologia em Desenvolvimento de Sistemas',
-        '04176': 'Tecnologia em Análise e Desenvolvimento de Sistemas'
+        '04168': 'Tecnologia em Gestão Ambiental',
+        '04169': 'Tecnologia em Alimentos',
+        '04170': 'Engenharia de Produção Agroindustrial',
+        '04175': 'Tecnologia em Manutenção Industrial',
+        '04176': 'Tecnologia em Análise e Desenvolvimento de Sistemas',
+        '04200': 'Engenharia de Produção',
+        '04201': 'Engenharia de Alimentos',
+        '04202': 'Engenharia Ambiental',
+        '04219': 'Ciência da Computação',
+        '04220': 'Engenharia Elétrica',
+        '04262': 'Licenciatura em Química',
+        '04280': 'Engenharia Ambiental e Sanitária',
+        '04282': 'Química Industrial',
+        '04286': 'Gestão do Agronegócio'
     }
 }
 
