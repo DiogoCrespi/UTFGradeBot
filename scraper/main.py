@@ -38,6 +38,30 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Arquivo para armazenar a data da última atualização global
+LAST_GLOBAL_UPDATE_FILE = 'last_global_update.txt'
+
+def read_last_global_update():
+    """Lê a data da última atualização global salva em arquivo"""
+    if os.path.exists(LAST_GLOBAL_UPDATE_FILE):
+        try:
+            with open(LAST_GLOBAL_UPDATE_FILE, 'r') as f:
+                timestamp_str = f.read().strip()
+                if timestamp_str:
+                    return datetime.fromisoformat(timestamp_str)
+        except Exception as e:
+            logger.error(f"Erro ao ler data de atualização global do arquivo: {str(e)}")
+    return None
+
+def write_last_global_update(timestamp: datetime):
+    """Salva a data da última atualização global em arquivo"""
+    try:
+        with open(LAST_GLOBAL_UPDATE_FILE, 'w') as f:
+            f.write(timestamp.isoformat())
+        logger.info(f"Data de atualização global salva: {timestamp}")
+    except Exception as e:
+        logger.error(f"Erro ao salvar data de atualização global no arquivo: {str(e)}")
+
 def get_db_connection():
     try:
         return psycopg2.connect(
@@ -493,7 +517,7 @@ def process_campus(driver, campus_id, campus_nome, cur):
         return False
 
 def check_global_update(driver):
-    """Verifica a última atualização global do sistema"""
+    """Verifica a última atualização global do sistema comparando com a data salva em arquivo"""
     try:
         last_update_element = driver.find_element(By.ID, "last_update")
         if last_update_element:
@@ -503,27 +527,27 @@ def check_global_update(driver):
             # The format code for UTC is %Z, but strptime might not handle it directly.
             # Let's try parsing without %Z and assume UTC based on the string.
             try:
-                last_update_dt = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
+                last_update_web = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
             except ValueError:
                  # Fallback if UTC is not handled, try without it
-                last_update_dt = datetime.strptime(last_update_text.replace(' UTC', ''), "%a %b %d %H:%M:%S %Y")
+                last_update_web = datetime.strptime(last_update_text.replace(' UTC', ''), "%a %b %d %H:%M:%S %Y")
 
-            # Verifica se já temos essa atualização no banco na tabela cursos
-            conn = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT MAX(last_update) FROM cursos")
-            result = cur.fetchone()
+            # Lê a data da última atualização salva em arquivo
+            last_update_saved = read_last_global_update()
             
-            # If the database is not updated or no update exists, log and return True
-            if result and result[0] is not None:
-                logger.info(f"Última atualização no banco de dados: {result[0]}")
+            logger.info(f"Última atualização detectada na web: {last_update_web}")
+            if last_update_saved:
+                logger.info(f"Última atualização salva em arquivo: {last_update_saved}")
             else:
-                logger.info("Nenhuma atualização encontrada no banco de dados.")
-            logger.info(f"Nova atualização detectada na web: {last_update_dt}")
-            # We don't need to insert into global_updates anymore, as we check against courses.
-            cur.close()
-            conn.close()
-            return True
+                logger.info("Nenhuma data de atualização global salva em arquivo.")
+
+            # Compara a data da web com a data salva
+            if last_update_saved and last_update_web <= last_update_saved:
+                logger.info("Banco de dados já está atualizado globalmente.")
+                return False  # Não precisa atualizar se a data da web for menor ou igual à salva
+            
+            logger.info("Nova atualização global detectada ou nenhuma data salva. Iniciando raspagem completa.")
+            return True  # Precisa atualizar se a data da web for mais nova ou se não houver data salva
             
     except Exception as e:
         logger.error(f"Erro ao verificar atualização global: {str(e)}")
@@ -537,8 +561,6 @@ def main():
     try:
         logger.info("Iniciando o scraper...")
         driver = setup_driver()
-        conn = get_db_connection()
-        cur = conn.cursor()
         
         # Carrega a página inicial
         logger.info("Acessando a página inicial...")
@@ -546,9 +568,15 @@ def main():
         time.sleep(5)  # Aguarda o carregamento inicial
         
         # Verifica a última atualização global
-        if not check_global_update(driver):
+        needs_update = check_global_update(driver)
+
+        if not needs_update:
             logger.info("Nenhuma atualização necessária.")
             return
+
+        # Se precisa atualizar, conecta ao banco e processa
+        conn = get_db_connection()
+        cur = conn.cursor()
         
         # Processa cada campus
         for campus_id, campus_nome in SCRAPING_CONFIG['campus'].items():
@@ -559,13 +587,27 @@ def main():
                 else:
                     logger.warning(f"Falha ao processar campus {campus_nome}")
                 
-                # Volta para a página inicial
+                # Volta para a página inicial após processar o campus
                 driver.get(SCRAPING_CONFIG['url'])
                 time.sleep(5)
                 
             except Exception as e:
                 logger.error(f"Erro ao processar campus {campus_nome}: {str(e)}")
                 continue
+        
+        # Após processar todos os campus (se chegou até aqui), salva a nova data de atualização global
+        # É importante pegar a data da página novamente para garantir que seja a mesma que disparou a atualização
+        last_update_element = driver.find_element(By.ID, "last_update")
+        if last_update_element:
+            last_update_text = last_update_element.text
+            try:
+                last_update_web = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
+            except ValueError:
+                last_update_web = datetime.strptime(last_update_text.replace(' UTC', ''), "%a %b %d %H:%M:%S %Y")
+            
+            write_last_global_update(last_update_web)
+            logger.info("Raspagem completa concluída e data de atualização global salva.")
+
         
     except Exception as e:
         logger.error(f"Erro durante a execução do scraper: {str(e)}")
