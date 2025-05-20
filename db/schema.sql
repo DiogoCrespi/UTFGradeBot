@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS cursos (
     carga_horaria INTEGER NOT NULL,
     carga_horaria_total INTEGER NOT NULL,
     periodo_atual INTEGER NOT NULL,
+    last_update TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

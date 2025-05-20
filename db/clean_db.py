@@ -33,16 +33,26 @@ def clean_db():
         conn.commit()
         print('Tabelas removidas com sucesso.')
         
-        # Recria as tabelas usando as migrações
-        migrations = sorted([f for f in os.listdir(MIGRATIONS_DIR) if f.endswith('.sql')])
-        for migration in migrations:
-            path = os.path.join(MIGRATIONS_DIR, migration)
-            print(f'Executando migração: {migration}')
-            with open(path, 'r', encoding='utf-8') as f:
-                sql = f.read()
-                cur.execute(sql)
-                conn.commit()
-        print('Tabelas recriadas com sucesso.')
+        # Recria as tabelas usando o schema.sql
+        print('Criando tabelas usando schema.sql...')
+        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
+        with open(schema_path, 'r', encoding='utf-8') as f:
+            schema_sql = f.read()
+            cur.execute(schema_sql)
+            conn.commit()
+        print('Tabelas criadas com sucesso usando schema.sql.')
+        
+        # # Aplica as migrações incrementais - Removido para evitar conflito
+        # print('Aplicando migrações incrementais...')
+        # migrations = sorted([f for f in os.listdir(MIGRATIONS_DIR) if f.endswith('.sql')])
+        # for migration in migrations:
+        #     path = os.path.join(MIGRATIONS_DIR, migration)
+        #     print(f'Executando migração: {migration}')
+        #     with open(path, 'r', encoding='utf-8') as f:
+        #         sql = f.read()
+        #         cur.execute(sql)
+        #         conn.commit()
+        # print('Migrações incrementais aplicadas com sucesso.')
         
     except Exception as e:
         print(f'Erro ao limpar/recriar banco: {e}')

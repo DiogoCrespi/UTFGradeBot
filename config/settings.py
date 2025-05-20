@@ -8,7 +8,7 @@ load_dotenv()
 DB_CONFIG = {
     'host': 'localhost',
     'port': '5432',
-    'database': 'turing_bot',
+    'database': 'utfgradebot',
     'user': 'postgres',
     'password': '1597'
 }
