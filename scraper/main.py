@@ -498,24 +498,31 @@ def check_global_update(driver):
         last_update_element = driver.find_element(By.ID, "last_update")
         if last_update_element:
             last_update_text = last_update_element.text
-            last_update = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
-            
-            # Verifica se já temos essa atualização no banco
-            cur = get_db_connection().cursor()
-            cur.execute("SELECT last_update FROM global_updates ORDER BY last_update DESC LIMIT 1")
+            # Convert the string from the webpage to a datetime object
+            # The format seems to be "Mon Mar 17 12:26:42 UTC 2025"
+            # The format code for UTC is %Z, but strptime might not handle it directly.
+            # Let's try parsing without %Z and assume UTC based on the string.
+            try:
+                last_update_dt = datetime.strptime(last_update_text, "%a %b %d %H:%M:%S UTC %Y")
+            except ValueError:
+                 # Fallback if UTC is not handled, try without it
+                last_update_dt = datetime.strptime(last_update_text.replace(' UTC', ''), "%a %b %d %H:%M:%S %Y")
+
+            # Verifica se já temos essa atualização no banco na tabela cursos
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT MAX(last_update) FROM cursos")
             result = cur.fetchone()
             
-            if result and result[0] >= last_update:
-                logger.info(f"Sistema já está atualizado. Última atualização: {result[0]}")
-                return False
-            
-            # Registra a nova atualização
-            cur.execute("""
-                INSERT INTO global_updates (last_update)
-                VALUES (%s)
-            """, (last_update,))
-            cur.connection.commit()
-            logger.info(f"Nova atualização detectada: {last_update}")
+            # If the database is not updated or no update exists, log and return True
+            if result and result[0] is not None:
+                logger.info(f"Última atualização no banco de dados: {result[0]}")
+            else:
+                logger.info("Nenhuma atualização encontrada no banco de dados.")
+            logger.info(f"Nova atualização detectada na web: {last_update_dt}")
+            # We don't need to insert into global_updates anymore, as we check against courses.
+            cur.close()
+            conn.close()
             return True
             
     except Exception as e:
@@ -539,9 +546,9 @@ def main():
         time.sleep(5)  # Aguarda o carregamento inicial
         
         # Verifica a última atualização global
-        # if not check_global_update(driver):
-        #     logger.info("Nenhuma atualização necessária.")
-        #     return
+        if not check_global_update(driver):
+            logger.info("Nenhuma atualização necessária.")
+            return
         
         # Processa cada campus
         for campus_id, campus_nome in SCRAPING_CONFIG['campus'].items():

@@ -1,6 +1,7 @@
 import os
 import sys
 import psycopg2
+from dotenv import load_dotenv
 
 # Adiciona o diretório raiz ao PYTHONPATH
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -9,10 +10,11 @@ from config.settings import DB_CONFIG
 
 MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), 'migrations')
 
-def clean_db():
-    """Remove e recria as tabelas do banco de dados"""
+def clean_database():
+    """Limpa o banco de dados e recria as tabelas"""
     conn = None
     try:
+        # Conecta ao banco de dados
         conn = psycopg2.connect(
             host=DB_CONFIG['host'],
             port=DB_CONFIG['port'],
@@ -20,47 +22,28 @@ def clean_db():
             user=DB_CONFIG['user'],
             password=DB_CONFIG['password']
         )
+        conn.autocommit = True
         cur = conn.cursor()
         
-        # Remove as tabelas existentes
-        cur.execute("""
-            DROP TABLE IF EXISTS horarios CASCADE;
-            DROP TABLE IF EXISTS turmas CASCADE;
-            DROP TABLE IF EXISTS curso_disciplinas CASCADE;
-            DROP TABLE IF EXISTS disciplinas CASCADE;
-            DROP TABLE IF EXISTS cursos CASCADE;
-        """)
-        conn.commit()
-        print('Tabelas removidas com sucesso.')
+        # Comenta o comando de limpar o banco
+        # cur.execute("DROP SCHEMA public CASCADE;")
+        # cur.execute("CREATE SCHEMA public;")
+        # cur.execute("GRANT ALL ON SCHEMA public TO postgres;")
+        # cur.execute("GRANT ALL ON SCHEMA public TO public;")
         
-        # Recria as tabelas usando o schema.sql
-        print('Criando tabelas usando schema.sql...')
-        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
-        with open(schema_path, 'r', encoding='utf-8') as f:
-            schema_sql = f.read()
-            cur.execute(schema_sql)
-            conn.commit()
-        print('Tabelas criadas com sucesso usando schema.sql.')
+        # Executa o schema
+        with open('db/schema.sql', 'r', encoding='utf-8') as f:
+            schema = f.read()
+            cur.execute(schema)
         
-        # # Aplica as migrações incrementais - Removido para evitar conflito
-        # print('Aplicando migrações incrementais...')
-        # migrations = sorted([f for f in os.listdir(MIGRATIONS_DIR) if f.endswith('.sql')])
-        # for migration in migrations:
-        #     path = os.path.join(MIGRATIONS_DIR, migration)
-        #     print(f'Executando migração: {migration}')
-        #     with open(path, 'r', encoding='utf-8') as f:
-        #         sql = f.read()
-        #         cur.execute(sql)
-        #         conn.commit()
-        # print('Migrações incrementais aplicadas com sucesso.')
+        print("Banco de dados limpo e recriado com sucesso!")
         
     except Exception as e:
-        print(f'Erro ao limpar/recriar banco: {e}')
-        if conn:
-            conn.rollback()
+        print(f"Erro ao limpar banco de dados: {str(e)}")
+        raise
     finally:
         if conn:
             conn.close()
 
 if __name__ == "__main__":
-    clean_db() 
+    clean_database() 
