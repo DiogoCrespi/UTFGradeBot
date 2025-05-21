@@ -8,33 +8,66 @@ Este projeto é um scraper para extrair dados do Grade na Hora da UTFPR e armaze
 - PostgreSQL 12+
 - Chrome/Chromium instalado
 
-## Instalação
+## Instalação e Configuração do Banco de Dados
 
-1. Clone o repositório:
+### 1. Clone o repositório
 ```bash
 git clone https://github.com/seu-usuario/turing-bot.git
 cd turing-bot
 ```
 
-2. Crie um ambiente virtual e ative-o:
+### 2. Crie e ative um ambiente virtual
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
+# Ative o ambiente virtual:
+# Linux/Mac:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
 ```
 
-3. Instale as dependências:
+### 3. Instale as dependências do projeto
 ```bash
 pip install -r requirements.txt
+pip install -e .  # Instalação em modo editável (recomendado)
 ```
 
-4. Configure o banco de dados:
-- Crie um banco de dados PostgreSQL
-- Execute o script `db/schema.sql` para criar as tabelas
+### 4. Configure o banco de dados PostgreSQL
+- Certifique-se de que o PostgreSQL está instalado e rodando na sua máquina.
+- Crie o banco de dados (ajuste a senha se necessário):
+```bash
+psql -U postgres -c "DROP DATABASE IF EXISTS utfgradebot;"
+psql -U postgres -c "CREATE DATABASE utfgradebot;"
+```
 
-5. Configure as variáveis de ambiente:
-- Copie o arquivo `.env.example` para `.env`
-- Ajuste as configurações conforme necessário
+### 5. Configure as variáveis de ambiente
+- Crie um arquivo `.env` na raiz do projeto com o seguinte conteúdo:
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=utfgradebot
+DB_USER=postgres
+DB_PASSWORD=1597
+```
+
+### 6. Crie as tabelas do banco de dados
+- Execute as migrações para criar todas as tabelas necessárias:
+```bash
+python db/run_migrations.py
+```
+- (Opcional, para garantir que todas as tabelas estejam corretas):
+```bash
+python db/clean_db.py
+```
+
+### 7. Verifique se o banco de dados está correto
+```bash
+python -m db.check_counts
+```
+
+---
+
+Pronto! Agora o banco de dados está criado e pronto para uso. Siga as próximas instruções do projeto para rodar o scraper ou a API.
 
 ## Uso
 
