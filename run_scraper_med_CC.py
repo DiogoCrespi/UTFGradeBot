@@ -226,10 +226,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
             WebDriverWait(driver, SELENIUM_CONFIG['timeout']).until(
                 EC.presence_of_element_located((By.ID, "resultado"))
             )
-            # Salva o HTML da página para debug
-            with open("pagina_curso_CC_Medianeira.html", "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
-            logger.info("HTML da página do curso salvo em pagina_curso_CC_Medianeira.html")
         except:
             logger.error(f"Timeout ao carregar página do curso {curso_codigo}")
             return False

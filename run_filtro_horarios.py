@@ -147,55 +147,97 @@ def main():
     """Função principal do programa"""
     filtrador = FiltradorHorarios()
 
-    # Interface com o usuário
-    print("=== Filtrador de Horários de Aulas ===\n")
-    print("1. Buscar por um horário específico")
-    print("2. Informar horários disponíveis")
+    while True:
+        # Limpa a tela
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        print("╔════════════════════════════════════════════════════════════╗")
+        print("║               FILTRADOR DE HORÁRIOS DE AULAS               ║")
+        print("╠════════════════════════════════════════════════════════════╣")
+        print("║                                                           ║")
+        print("║  Este programa filtra horários de aulas do curso de       ║")
+        print("║  Ciência da Computação em Medianeira.                     ║")
+        print("║                                                           ║")
+        print("║  Opções disponíveis:                                      ║")
+        print("║                                                           ║")
+        print("║  1. Buscar por um horário específico                      ║")
+        print("║  2. Informar horários disponíveis                         ║")
+        print("║  0. Sair                                                  ║")
+        print("║                                                           ║")
+        print("╚════════════════════════════════════════════════════════════╝")
 
-    opcao = input("\nEscolha uma opção (1-2): ").strip()
+        opcao = input("\nEscolha uma opção (1-3): ").strip()
 
-    if opcao == "1":
-        # Busca por horário específico
-        print("\nFormato do horário: dTa (d=dia[2-6], T=turno[M,T,N], a=aula[1-6])")
-        print("Exemplo: 2M1 (Segunda-feira, Manhã, primeira aula)")
-        horario = input("\nDigite o horário que deseja buscar: ").strip().upper()
+        if opcao == "1":
+            while True:
+                print("\n╔════════════════════════════════════════════════════════════╗")
+                print("║                  BUSCA POR HORÁRIO ESPECÍFICO              ║")
+                print("╚════════════════════════════════════════════════════════════╝")
+                print("\nFormato do horário: dTa (d=dia[2-6], T=turno[M,T,N], a=aula[1-6])")
+                print("Exemplo: 2M1 (Segunda-feira, Manhã, primeira aula)")
+                horario = input("\nDigite o horário que deseja buscar (ou 'voltar' para retornar): ").strip().upper()
 
-        if not validar_formato_horario(horario):
-            print("Erro: Formato de horário inválido.")
-            return
+                if horario.lower() == 'voltar':
+                    break
 
-        try:
-            dados = filtrador.obter_dados_curso()
-            resultados = filtrador.filtrar_horarios(dados, horario)
-            filtrador.exibir_resultados(resultados)
-        except Exception as e:
-            print(f"\nErro ao processar dados: {str(e)}")
+                if not validar_formato_horario(horario):
+                    print("\n❌ Erro: Formato de horário inválido.")
+                    input("\nPressione ENTER para tentar novamente...")
+                    continue
 
-    elif opcao == "2":
-        # Busca por múltiplos horários
-        print("\nInforme os horários disponíveis separados por espaço")
-        print("Formato: dTa (d=dia[2-6], T=turno[M,T,N], a=aula[1-6])")
-        print("Exemplo: 2M1 2M2 4M3 6M1")
+                try:
+                    dados = filtrador.obter_dados_curso()
+                    resultados = filtrador.filtrar_horarios(dados, horario)
+                    filtrador.exibir_resultados(resultados)
+                    input("\nPressione ENTER para continuar...")
+                    break
+                except Exception as e:
+                    print(f"\n❌ Erro ao processar dados: {str(e)}")
+                    input("\nPressione ENTER para tentar novamente...")
 
-        horarios_input = [h.upper() for h in input("\nDigite os horários: ").strip().split()]
+        elif opcao == "2":
+            while True:
+                print("\n╔════════════════════════════════════════════════════════════╗")
+                print("║                BUSCA POR HORÁRIOS DISPONÍVEIS              ║")
+                print("╚════════════════════════════════════════════════════════════╝")
+                print("\nInforme os horários disponíveis separados por espaço")
+                print("Formato: dTa (d=dia[2-6], T=turno[M,T,N], a=aula[1-6])")
+                print("Exemplo: 2M1 2M2 4M3 6M1")
+                print("\nDigite 'voltar' para retornar ao menu principal")
 
-        # Valida todos os horários
-        if not all(validar_formato_horario(h) for h in horarios_input):
-            print("Erro: Um ou mais horários estão em formato inválido.")
-            return
+                horarios_input = input("\nDigite os horários: ").strip()
+                
+                if horarios_input.lower() == 'voltar':
+                    break
 
-        # Converte lista para conjunto para busca mais eficiente
-        horarios_busca = set(horarios_input)
+                horarios_input = [h.upper() for h in horarios_input.split()]
 
-        try:
-            dados = filtrador.obter_dados_curso()
-            resultados = filtrador.filtrar_varios_horarios(dados, horarios_busca)
-            filtrador.exibir_resultados(resultados)
-        except Exception as e:
-            print(f"\nErro ao processar dados: {str(e)}")
+                # Valida todos os horários
+                if not all(validar_formato_horario(h) for h in horarios_input):
+                    print("\n❌ Erro: Um ou mais horários estão em formato inválido.")
+                    input("\nPressione ENTER para tentar novamente...")
+                    continue
 
-    else:
-        print("Opção inválida!")
+                # Converte lista para conjunto para busca mais eficiente
+                horarios_busca = set(horarios_input)
+
+                try:
+                    dados = filtrador.obter_dados_curso()
+                    resultados = filtrador.filtrar_varios_horarios(dados, horarios_busca)
+                    filtrador.exibir_resultados(resultados)
+                    input("\nPressione ENTER para continuar...")
+                    break
+                except Exception as e:
+                    print(f"\n❌ Erro ao processar dados: {str(e)}")
+                    input("\nPressione ENTER para tentar novamente...")
+
+        elif opcao == "0":
+            print("\nObrigado por usar o Filtrador de Horários!")
+            break
+
+        else:
+            print("\n❌ Opção inválida!")
+            input("\nPressione ENTER para tentar novamente...")
 
 if __name__ == "__main__":
     main()
