@@ -149,25 +149,59 @@ def parse_disciplina(disciplina_text):
         logger.error(f"Erro ao processar disciplina: {str(e)}")
         return None
 
-def parse_turma(turma_text):
-    """Extrai informações da turma do texto"""
-    try:
-        # Exemplo: ALI2 — Franciele Buss Frescki Kestring [ 4M3(I11) - 4M4(I11) - 4M5(I11) ]
-        match = re.match(r'([A-Z0-9]+)\s*—\s*([^[]+)\s*\[(.*?)\]', turma_text)
-        if match:
-            codigo, professor, horarios = match.groups()
-            horarios_list = parse_horarios(horarios)
-            return {
-                "codigo": str(codigo.strip()),
-                "professor": str(professor.strip()),
-                "horarios": horarios_list
-            }
-        else:
-            logger.warning(f"Formato inválido de turma: {turma_text}")
-            return None
-    except Exception as e:
-        logger.error(f"Erro ao processar turma: {str(e)}")
-        return None
+def parse_turmas_html(html):
+    """Extrai disciplinas e suas turmas do HTML"""
+    soup = BeautifulSoup(html, 'html.parser')
+    results = []
+    current_disciplina = None
+    for elem in soup.find_all(['span']):
+        if 'class' in elem.attrs:
+            if 'disc' in elem['class']:
+                # Nova disciplina
+                disc_text = elem.get_text(separator=' ', strip=True)
+                # Exemplo: [MAT1004] Álgebra Linear (3 aulas/sem)
+                m = re.match(r'\[([A-Z0-9]+)\]\s+(.*?)\s+\((\d+) aulas/sem\)', disc_text)
+                if m:
+                    codigo, nome, aulas = m.groups()
+                    current_disciplina = {
+                        "codigo": codigo.strip(),
+                        "nome": nome.strip(),
+                        "carga_horaria": int(aulas) * 15,  # 15 semanas por semestre
+                        "turmas": []
+                    }
+                    results.append(current_disciplina)
+                else:
+                    current_disciplina = None
+            elif 'tur' in elem['class'] and current_disciplina is not None:
+                # Turma associada à disciplina atual
+                label = elem.find('label')
+                if not label:
+                    continue
+                texto = label.get_text(separator=' ', strip=True)
+                # Exemplo: "ALI2 — Franciele Buss Frescki Kestring [ 4M3(I11) - 4M4(I11) - 4M5(I11) ]"
+                match = re.match(r'([A-Z0-9]+)\s*—\s*([^\[]+)\s*\[\s*(.*?)\s*\]', texto)
+                if not match:
+                    continue
+                codigo, professor, horarios_str = match.groups()
+                horarios = []
+                for h in horarios_str.split(' - '):
+                    h_match = re.match(r'(\d)([MTN])(\d)\((.*?)\)', h.strip())
+                    if h_match:
+                        dia, turno, aula, sala = h_match.groups()
+                        horarios.append({
+                            "dia": int(dia),
+                            "turno": turno,
+                            "aula_inicio": int(aula),
+                            "aula_fim": int(aula),
+                            "sala": sala
+                        })
+                turma = {
+                    "codigo": codigo.strip(),
+                    "professor": professor.strip(),
+                    "horarios": horarios
+                }
+                current_disciplina["turmas"].append(turma)
+    return results
 
 def handle_popup(driver):
     """Lida com popups do navegador"""
@@ -199,47 +233,35 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
             return false;
         """
         clicked = driver.execute_script(script)
+        time.sleep(1)
 
-        # Adicionar um pequeno delay após o clique antes de verificar alertas
-        time.sleep(1) # Pequeno delay para o alerta aparecer
-
-        # Verifica se há popup de erro (MOVIDO PARA CÁ)
+        # Verifica se há popup de erro
         try:
             alert = driver.switch_to.alert
             alert_text = alert.text
             logger.warning(f"Alerta encontrado: {alert_text}")
-
-            # Verifica se é um alerta de curso não disponível e lida com ele
             if "não está disponível no GNH" in alert_text:
-                logger.warning(f"Curso {curso_codigo} não está disponível no momento (via alerta)")
+                logger.warning(f"Curso {curso_codigo} não está disponível no momento")
                 alert.accept()
-                return False # Sai da função se o curso não está disponível
-
-            # Se não for um alerta de curso não disponível, aceita e continua (ou decide outra ação)
+                return False
             alert.accept()
-            logger.info("Alerta aceito.")
-
-        except NoAlertPresentException: # Importar NoAlertPresentException do selenium.common.exceptions
-            pass  # Se não houver alerta, continua normalmente
-        except Exception as e:
-            logger.error(f"Erro ao lidar com alerta: {str(e)}")
-            # Decide se continua ou para após um erro inesperado com o alerta
-            # Neste caso, vamos logar e continuar, mas pode ser ajustado
+        except:
+            pass
 
         if not clicked:
             logger.error(f"Não foi possível encontrar o botão para o curso {curso_codigo}")
             return False
 
-        time.sleep(5)  # Mantém o aguardo para o carregamento da página após o clique e tratamento do alerta
+        time.sleep(5)
         
-        # Verifica se há mensagem de erro "este curso não está disponível no GNH"
+        # Verifica se há mensagem de erro
         try:
             error_message = driver.find_element(By.XPATH, "//*[contains(text(), 'este curso não está disponível no GNH')]")
             if error_message:
                 logger.warning(f"Curso {curso_codigo} não está disponível no GNH")
                 return False
         except:
-            pass  # Se não encontrar a mensagem de erro, continua normalmente
+            pass
         
         # Aguarda o carregamento da página
         try:
@@ -255,25 +277,22 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
             last_update_text = driver.find_element(By.XPATH, "//strong[contains(text(), '/')]").text
             last_update = datetime.strptime(last_update_text, "%d/%m/%Y %H:%M:%S")
             
-            # Verifica se o curso já existe e compara as datas
+            # Verifica se o curso já existe e compara a data de atualização
             cur.execute("SELECT last_update FROM cursos WHERE codigo = %s", (curso_codigo,))
             result = cur.fetchone()
             
-            if result and result[0]:
-                stored_last_update = result[0]
-                if stored_last_update >= last_update:
-                    logger.info(f"Curso {curso_codigo} já está atualizado. Última atualização: {stored_last_update}")
-                    return True
+            if result and result[0] and last_update <= result[0]:
+                logger.info(f"Curso {curso_codigo} já está atualizado. Última atualização: {result[0]}")
+                return True
+                
         except Exception as e:
             logger.error(f"Erro ao verificar data de atualização: {str(e)}")
-            # Se houver erro ao verificar a data, continua com o processamento
         
         # Inicia uma transação para o curso
         cur.execute("BEGIN")
         
         try:
             # Insere ou atualiza o curso
-            logger.info(f"Tentando inserir curso: codigo={curso_codigo}, nome={curso_nome}, campus={campus_nome}")
             cur.execute("""
                 INSERT INTO cursos (codigo, nome, modalidade, campus, turno, duracao, carga_horaria, carga_horaria_total, periodo_atual, last_update)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -292,12 +311,12 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                 curso_codigo,
                 curso_nome,
                 'PRESENCIAL',
-                campus_nome,  # Corrigido para garantir que é string
-                'INTEGRAL',  # valor padrão
-                8,  # valor padrão
-                0,  # será atualizado depois
-                0,  # será atualizado depois
-                1,  # valor padrão
+                campus_nome,
+                'INTEGRAL',
+                8,
+                0,
+                0,
+                1,
                 last_update
             ))
             
@@ -307,19 +326,15 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
             disciplinas = driver.find_elements(By.CLASS_NAME, "disc")
             carga_horaria_total = 0
             
-            # Ordena as disciplinas pelo código
             disciplinas.sort(key=lambda x: x.text.split(']')[0].strip('['))
             
-            # Lista para armazenar os códigos das disciplinas processadas
             disciplinas_processadas = []
             disciplinas_com_erro = []
             
             for disciplina in disciplinas:
                 try:
-                    # Inicia uma transação para cada disciplina
                     cur.execute("SAVEPOINT disciplina")
                     
-                    # Extrai informações da disciplina
                     disciplina_text = disciplina.text
                     disciplina_info = parse_disciplina(disciplina_text)
                     
@@ -327,7 +342,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                         codigo_disciplina = disciplina_info['codigo']
                         logger.info(f"Processando disciplina: {codigo_disciplina} - {disciplina_info['nome']}")
                         
-                        # Verifica se a disciplina já foi processada
                         if codigo_disciplina in disciplinas_processadas:
                             logger.warning(f"Disciplina {codigo_disciplina} já foi processada anteriormente")
                             cur.execute("ROLLBACK TO SAVEPOINT disciplina")
@@ -335,8 +349,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                         
                         disciplinas_processadas.append(codigo_disciplina)
                         
-                        # Insere ou atualiza a disciplina
-                        logger.info(f"Tentando inserir disciplina: {disciplina_info}")
                         cur.execute("""
                             INSERT INTO disciplinas (codigo, nome, carga_horaria, tipo)
                             VALUES (%s, %s, %s, %s)
@@ -352,27 +364,23 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                         ))
                         disciplina_id = cur.fetchone()[0]
                         
-                        # Atualiza a carga horária total
                         carga_horaria_total += disciplina_info['carga_horaria']
                         
-                        # Relaciona a disciplina com o curso
-                        logger.info(f"Relacionando disciplina {disciplina_id} com curso {curso_id}")
                         cur.execute("""
                             INSERT INTO curso_disciplinas (curso_id, disciplina_id, periodo)
                             VALUES (%s, %s, %s)
                             ON CONFLICT (curso_id, disciplina_id, periodo) DO NOTHING
                         """, (curso_id, disciplina_id, 0))
                         
-                        # Processa as turmas da disciplina
-                        # Encontra todas as turmas que seguem esta disciplina
-                        turmas = driver.find_elements(By.XPATH, f"//span[@class='disc'][contains(text(), '{codigo_disciplina}')]/following-sibling::span[@class='tur']")
-                        
-                        for turma in turmas:
-                            turma_info = parse_turma(turma.text)
-                            if turma_info:
+                        # Get the full HTML of the 'resultado' div
+                        resultado_div = driver.find_element(By.ID, "resultado")
+                        resultado_html = resultado_div.get_attribute('outerHTML')
+                        parsed_disciplinas = parse_turmas_html(resultado_html)
+                        # Find the parsed disciplina matching this code
+                        parsed_disc = next((d for d in parsed_disciplinas if d["codigo"] == codigo_disciplina), None)
+                        if parsed_disc:
+                            for turma_info in parsed_disc["turmas"]:
                                 logger.info(f"  Turma: {turma_info['codigo']} - Prof: {turma_info['professor']}")
-                                
-                                # Insere ou atualiza a turma
                                 cur.execute("""
                                     INSERT INTO turmas (disciplina_id, codigo, professor)
                                     VALUES (%s, %s, %s)
@@ -385,13 +393,8 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                                     turma_info['professor']
                                 ))
                                 turma_id = cur.fetchone()[0]
-                                
                                 # Insere os horários da turma
                                 for horario in turma_info['horarios']:
-                                    if not isinstance(horario, dict):
-                                        logger.error(f"Horário não é dict! Tipo: {type(horario)}, Valor: {horario}")
-                                        continue
-                                    logger.info(f"Inserindo horário: {horario}")
                                     cur.execute("""
                                         INSERT INTO horarios 
                                         (turma_id, dia_semana, turno, aula_inicio, aula_fim, sala)
@@ -406,7 +409,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                                         horario['sala']
                                     ))
                         
-                        # Commit da transação da disciplina
                         cur.execute("RELEASE SAVEPOINT disciplina")
                         
                     else:
@@ -419,7 +421,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                     disciplinas_com_erro.append(disciplina.text)
                     cur.execute("ROLLBACK TO SAVEPOINT disciplina")
             
-            # Atualiza a carga horária total do curso
             cur.execute("""
                 UPDATE cursos 
                 SET carga_horaria_total = %s,
@@ -427,7 +428,6 @@ def process_curso(driver, curso_codigo, curso_nome, cur, campus_nome):
                 WHERE id = %s
             """, (carga_horaria_total, carga_horaria_total, curso_id))
             
-            # Commit da transação do curso
             cur.execute("COMMIT")
             
             logger.info(f"Curso {curso_codigo} processado com sucesso")

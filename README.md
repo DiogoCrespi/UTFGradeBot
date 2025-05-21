@@ -12,8 +12,8 @@ Este projeto é um scraper para extrair dados do Grade na Hora da UTFPR e armaze
 
 ### 1. Clone o repositório
 ```bash
-git clone https://github.com/seu-usuario/turing-bot.git
-cd turing-bot
+git clone ....
+cd ....
 ```
 
 ### 2. Crie e ative um ambiente virtual
