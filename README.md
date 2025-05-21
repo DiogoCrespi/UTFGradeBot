@@ -1,4 +1,4 @@
-# Turing Bot - Scraper Grade na Hora UTFPR
+# UTFGradeBot - Scraper Grade na Hora UTFPR
 
 Este projeto é um scraper para extrair dados do Grade na Hora da UTFPR e armazená-los em um banco de dados PostgreSQL.
 
@@ -86,7 +86,7 @@ O script irá:
 ## Estrutura do Projeto
 
 ```
-turing-bot/
+UTFGradeBot/
 ├── config/
 │   └── settings.py      # Configurações do projeto
 ├── db/
