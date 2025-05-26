@@ -37,11 +37,7 @@ pip install -e .  # Instalação em modo editável (recomendado)
 - Certifique-se de que o PostgreSQL está instalado e rodando na sua máquina.
 - Crie o banco de dados (ajuste a senha se necessário):
 ```bash
-# Linux/Mac:
-psql -U postgres -c "DROP DATABASE IF EXISTS utfgradebot;"
-psql -U postgres -c "CREATE DATABASE utfgradebot;"
-
-# Windows:
+# Linux/Mac & Windows::
 psql -U postgres -c "DROP DATABASE IF EXISTS utfgradebot;"
 psql -U postgres -c "CREATE DATABASE utfgradebot;"
 ```
@@ -86,17 +82,7 @@ python run_scraper_med_CC.py
 python run_filtro_horarios.py
 ```
 
-#### Linux/Mac
-1. Execute o scraper:
-```bash
-python run_scraper_med_CC.py
-```
-2. Execute o filtro de horários:
-```bash
-python run_filtro_horarios.py
-```
-
-### Uso com Docker
+## Uso com Docker
 
 #### 1. Construa as imagens Docker
 ```bash
