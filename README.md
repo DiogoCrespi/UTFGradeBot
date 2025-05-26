@@ -7,7 +7,7 @@ Este projeto é um scraper para extrair dados do Grade na Hora da UTFPR e armaze
 - Python 3.8+
 - PostgreSQL 12+
 - Chrome/Chromium instalado
-- Docker e Docker Compose (para execução em container)
+- Docker e Docker Compose (opcional, para execução em container)
 
 ## Instalação e Configuração do Banco de Dados
 
@@ -37,6 +37,11 @@ pip install -e .  # Instalação em modo editável (recomendado)
 - Certifique-se de que o PostgreSQL está instalado e rodando na sua máquina.
 - Crie o banco de dados (ajuste a senha se necessário):
 ```bash
+# Linux/Mac:
+psql -U postgres -c "DROP DATABASE IF EXISTS utfgradebot;"
+psql -U postgres -c "CREATE DATABASE utfgradebot;"
+
+# Windows:
 psql -U postgres -c "DROP DATABASE IF EXISTS utfgradebot;"
 psql -U postgres -c "CREATE DATABASE utfgradebot;"
 ```
@@ -66,19 +71,44 @@ python db/clean_db.py
 python -m db.check_counts
 ```
 
-## Uso com Docker
+## Uso
 
-### 1. Construa as imagens Docker
+### Execução Local
+
+#### Windows
+1. Certifique-se de que o ChromeDriver está na pasta `chromedriver` do projeto
+2. Execute o scraper:
+```bash
+python run_scraper_med_CC.py
+```
+3. Execute o filtro de horários:
+```bash
+python run_filtro_horarios.py
+```
+
+#### Linux/Mac
+1. Execute o scraper:
+```bash
+python run_scraper_med_CC.py
+```
+2. Execute o filtro de horários:
+```bash
+python run_filtro_horarios.py
+```
+
+### Uso com Docker
+
+#### 1. Construa as imagens Docker
 ```bash
 docker-compose build
 ```
 
-### 2. Execute o scraper para o curso de Ciência da Computação em Medianeira
+#### 2. Execute o scraper para o curso de Ciência da Computação em Medianeira
 ```bash
 docker-compose up scraper-cc
 ```
 
-### 3. Execute o filtro de horários
+#### 3. Execute o filtro de horários
 ```bash
 docker-compose run --rm filtro-cc
 ```
@@ -107,6 +137,7 @@ UTFGradeBot/
 ├── docker-compose.yml  # Configuração dos serviços Docker
 └── README.md           # Este arquivo
 ```
+
 ### Contribuindo
 
 1. Faça um fork do projeto
