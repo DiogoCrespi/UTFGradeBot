@@ -1,5 +1,5 @@
 @echo off
-echo Turing Bot - Scripts de execução
+echo UTF Grade Scraper - Scripts de execução
 echo.
 
 if "%1"=="" (
