@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  scraper-geral:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=utfgradebot
+      - DB_USER=postgres
+      - DB_PASSWORD=1597
+    depends_on:
+      - db
+    command: python run_scraper.py
+
+  scraper-cc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CHROMEDRIVER_PATH=/app/chromedriver/chromedriver
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=utfgradebot
+      - DB_USER=postgres
+      - DB_PASSWORD=1597
+      - SELENIUM_HEADLESS=True
+      - SELENIUM_TIMEOUT=30
+      - SELENIUM_WAIT_TIME=5
+    depends_on:
+      - db
+    command: python run_scraper_med_CC.py
+
+  filtro-cc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=utfgradebot
+      - DB_USER=postgres
+      - DB_PASSWORD=1597
+    depends_on:
+      - db
+    command: python run_filtro_horarios.py
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=utfgradebot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1597
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data: 

@@ -4,8 +4,16 @@
 import os
 import re
 import sys
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from config.settings import DB_CONFIG
 from typing import List, Dict, Set
 from db.db import Database
+
+# Configura a codificação para UTF-8 no Windows
+if os.name == 'nt':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stdin.reconfigure(encoding='utf-8')
 
 class FiltradorHorarios:
     """Classe para filtrar horários de aulas do banco de dados"""
@@ -166,7 +174,7 @@ def main():
         print("║                                                           ║")
         print("╚════════════════════════════════════════════════════════════╝")
 
-        opcao = input("\nEscolha uma opção (1-3): ").strip()
+        opcao = input("\nEscolha uma opção (0-2): ").strip()
 
         if opcao == "1":
             while True:

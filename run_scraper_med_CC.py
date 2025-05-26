@@ -50,7 +50,12 @@ def setup_driver():
         options.add_argument('--disable-popup-blocking')
         options.add_argument('--disable-blink-features=AutomationControlled')
         
-        driver_path = os.path.join(os.getcwd(), 'chromedriver', 'chromedriver.exe')
+        # Determina o caminho do ChromeDriver baseado no sistema operacional
+        if os.name == 'nt':  # Windows
+            driver_path = os.path.join(os.getcwd(), 'chromedriver', 'chromedriver.exe')
+        else:  # Linux/Mac
+            driver_path = os.getenv('CHROMEDRIVER_PATH', '/app/chromedriver/chromedriver')
+        
         if not os.path.exists(driver_path):
             logger.error(f"ChromeDriver não encontrado em: {driver_path}")
             raise FileNotFoundError(f"ChromeDriver não encontrado em: {driver_path}")
@@ -58,7 +63,7 @@ def setup_driver():
         driver = uc.Chrome(
             options=options,
             driver_executable_path=driver_path,
-            version_main=120
+            version_main=136  # Versão específica do Chrome
         )
         return driver
     except Exception as e:
@@ -405,6 +410,13 @@ def main():
     
     try:
         logger.info("Iniciando o scraper para Ciência da Computação em Medianeira...")
+        
+        # Configura a codificação para UTF-8
+        if os.name == 'nt':  # Windows
+            import sys
+            sys.stdout.reconfigure(encoding='utf-8')
+            sys.stdin.reconfigure(encoding='utf-8')
+        
         driver = setup_driver()
         
         # Carrega a página inicial

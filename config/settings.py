@@ -6,16 +6,16 @@ load_dotenv()
 
 # Configurações do Banco de Dados
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': '5432',
-    'database': 'utfgradebot',
-    'user': 'postgres',
-    'password': '1597'
+    'host': os.getenv('DB_HOST', 'db'),  # Usa 'db' como padrão para ambiente Docker
+    'port': os.getenv('DB_PORT', '5432'),
+    'database': os.getenv('DB_NAME', 'utfgradebot'),
+    'user': os.getenv('DB_USER', 'postgres'),
+    'password': os.getenv('DB_PASSWORD', '1597')
 }
 
 # Configurações do Web Scraping
 SCRAPING_CONFIG = {
-    'url': 'https://gradenahora.com.br/utfpr/grade_na_hora.html',
+    'url': os.getenv('SCRAPING_URL', 'https://gradenahora.com.br/utfpr/grade_na_hora.html'),
     'campus': {
         'apucarana': 'Apucarana',
         'campo_mourao': 'Campo Mourão',
@@ -38,9 +38,9 @@ SCRAPING_CONFIG = {
 
 # Configurações do Selenium
 SELENIUM_CONFIG = {
-    'headless': False,  # Desabilitado para debug
-    'timeout': 30,
-    'wait_time': 5
+    'headless': os.getenv('SELENIUM_HEADLESS', 'True').lower() == 'true',
+    'timeout': int(os.getenv('SELENIUM_TIMEOUT', '30')),
+    'wait_time': int(os.getenv('SELENIUM_WAIT_TIME', '5'))
 }
 
 # Configurações do Bot (futuro)
