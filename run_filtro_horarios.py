@@ -166,7 +166,7 @@ def main():
         print("║                                                           ║")
         print("╚════════════════════════════════════════════════════════════╝")
 
-        opcao = input("\nEscolha uma opção (1-3): ").strip()
+        opcao = input("\nEscolha uma opção (0-2): ").strip()
 
         if opcao == "1":
             while True:

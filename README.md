@@ -7,6 +7,7 @@ Este projeto é um scraper para extrair dados do Grade na Hora da UTFPR e armaze
 - Python 3.8+
 - PostgreSQL 12+
 - Chrome/Chromium instalado
+- Docker e Docker Compose (para execução em container)
 
 ## Instalação e Configuração do Banco de Dados
 
@@ -65,22 +66,27 @@ python db/clean_db.py
 python -m db.check_counts
 ```
 
----
+## Uso com Docker
 
-Pronto! Agora o banco de dados está criado e pronto para uso. Siga as próximas instruções do projeto para rodar o scraper ou a API.
-
-## Uso
-
-Para executar o scraper:
-
+### 1. Construa as imagens Docker
 ```bash
-python scraper/main.py
+docker-compose build
+```
+
+### 2. Execute o scraper para o curso de Ciência da Computação em Medianeira
+```bash
+docker-compose up scraper-cc
+```
+
+### 3. Execute o filtro de horários
+```bash
+docker-compose run --rm filtro-cc
 ```
 
 O script irá:
 1. Conectar ao banco de dados
 2. Acessar o Grade na Hora
-3. Extrair informações dos cursos configurados
+3. Extrair informações do curso de Ciência da Computação em Medianeira
 4. Salvar os dados no banco de dados
 
 ## Estrutura do Projeto
@@ -94,43 +100,14 @@ UTFGradeBot/
 │   └── queries.py       # Queries SQL
 ├── scraper/
 │   └── main.py         # Código principal do scraper
+├── run_scraper_med_CC.py  # Script específico para CC Medianeira
+├── run_filtro_horarios.py # Script para filtrar horários
 ├── requirements.txt     # Dependências do projeto
+├── Dockerfile          # Configuração do container Docker
+├── docker-compose.yml  # Configuração dos serviços Docker
 └── README.md           # Este arquivo
 ```
-
-
-## API REST
-
-A API REST foi implementada para permitir consultas aos dados do currículo da UTFPR. Ela utiliza FastAPI e oferece endpoints para listar cursos, disciplinas, turmas e carga horária.
-
-### Endpoints
-
-- `GET /api/cursos` - Lista todos os cursos
-- `GET /api/cursos/{codigo}` - Retorna detalhes de um curso específico
-- `GET /api/cursos/{codigo}/disciplinas` - Lista todas as disciplinas de um curso
-- `GET /api/cursos/{codigo}/disciplinas/{periodo}` - Lista disciplinas de um período específico
-- `GET /api/cursos/{codigo}/carga-horaria` - Retorna a carga horária total por período
-- `GET /api/disciplinas/{codigo}` - Retorna detalhes de uma disciplina
-- `GET /api/disciplinas/{codigo}/turmas` - Lista todas as turmas de uma disciplina
-
-### Como executar a API
-
-1. Instale as dependências:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. Execute o servidor:
-   ```bash
-   python run_api.py
-   ```
-
-3. Acesse a documentação interativa em:
-   ```
-   http://localhost:8000/docs
-   ```
-   
-## Contribuindo
+### Contribuindo
 
 1. Faça um fork do projeto
 2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
