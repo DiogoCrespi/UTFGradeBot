@@ -87,6 +87,8 @@ python run_filtro_horarios.py
 #### 1. Construa as imagens Docker
 ```bash
 docker-compose build
+
+docker-compose up migrations
 ```
 
 #### 2. Execute o scraper para o curso de Ciência da Computação em Medianeira

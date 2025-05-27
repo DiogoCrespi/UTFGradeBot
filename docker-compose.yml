@@ -66,5 +66,21 @@ services:
     ports:
       - "5432:5432"
 
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=utfgradebot
+      - DB_USER=postgres
+      - DB_PASSWORD=1597
+    depends_on:
+      - db
+    command: python db/run_migrations.py
+
 volumes:
   postgres_data: 

@@ -11,7 +11,7 @@ def criar_banco():
             host="localhost",
             port="5432",
             user="postgres",
-            password="postgres"
+            password="1597"
         )
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
@@ -37,7 +37,7 @@ def criar_banco():
             port="5432",
             database="turing_bot",
             user="postgres",
-            password="postgres"
+            password="1597"
         )
         cursor = conn.cursor()
         
