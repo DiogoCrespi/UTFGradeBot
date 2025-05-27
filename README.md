@@ -87,8 +87,13 @@ python run_filtro_horarios.py
 #### 1. Construa as imagens Docker
 ```bash
 docker-compose build
-
-docker-compose up migrations
+```
+```bash
+docker-compose down #tentando reparar Pare todos os containers
+docker volume rm utfgradebot_postgres_data #Remova o volume do banco de dados
+```
+```bash
+docker-compose up migrations #Execute as migrações
 ```
 
 #### 2. Execute o scraper para o curso de Ciência da Computação em Medianeira
