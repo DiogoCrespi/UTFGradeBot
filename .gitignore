@@ -46,10 +46,6 @@ ENV/
 htmlcov/
 .pytest_cache/
 
-# Chrome driver
-chromedriver.exe
-chromedriver
-
 # OS
 .DS_Store
 Thumbs.db
